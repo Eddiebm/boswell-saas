@@ -10,7 +10,7 @@ export default function LoginPage() {
           Connect GitHub to import repositories and run cloud audits.
         </p>
         <form
-          className="mt-8"
+          className="mt-8 space-y-3"
           action={async () => {
             "use server";
             await signIn("github", { redirectTo: "/dashboard" });
@@ -20,6 +20,13 @@ export default function LoginPage() {
             Continue with GitHub
           </Button>
         </form>
+        {process.env.GITHUB_BOOTSTRAP_TOKEN ? (
+          <p className="mt-4 text-xs text-zinc-500">
+            Owner setup: visit{" "}
+            <code className="text-zinc-400">/api/setup/owner</code> with{" "}
+            <code className="text-zinc-400">x-worker-secret</code> header.
+          </p>
+        ) : null}
       </Card>
     </div>
   );

@@ -1,18 +1,7 @@
-import { Octokit } from "octokit";
-import { and, eq } from "drizzle-orm";
-import { requireDb } from "@/lib/db";
-import { accounts } from "@/lib/db/schema";
+import { Octokit } from "@octokit/rest";
+import { getGithubToken } from "@/lib/github/token";
 
-export async function getGithubToken(userId: string): Promise<string | null> {
-  const db = requireDb();
-  const [account] = await db
-    .select()
-    .from(accounts)
-    .where(and(eq(accounts.userId, userId), eq(accounts.provider, "github")))
-    .limit(1);
-
-  return account?.access_token ?? null;
-}
+export { getGithubToken } from "@/lib/github/token";
 
 export async function getGithubClient(userId: string) {
   const token = await getGithubToken(userId);

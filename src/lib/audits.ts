@@ -18,7 +18,7 @@ import { enrichFinding } from "@/lib/enrich/finding";
 import { groupByClassification } from "@/lib/classification/classify";
 import { prioritizeFixQueue } from "@/lib/fix-queue/prioritize";
 import { computeRepoScore } from "@/lib/scoring/engine";
-import { getGithubToken } from "@/lib/github";
+import { getGithubToken } from "@/lib/github/token";
 import {
   currentMonthKey,
   getPlanLimits,

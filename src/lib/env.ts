@@ -26,8 +26,18 @@ export function getEnvChecks(): EnvCheck[] {
     },
     {
       name: "GitHub OAuth",
-      status: process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET ? "ok" : "missing",
-      detail: "AUTH_GITHUB_ID + AUTH_GITHUB_SECRET",
+      status:
+        process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET
+          ? "ok"
+          : process.env.GITHUB_BOOTSTRAP_TOKEN
+            ? "ok"
+            : "missing",
+      detail:
+        process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET
+          ? "AUTH_GITHUB_ID + AUTH_GITHUB_SECRET"
+          : process.env.GITHUB_BOOTSTRAP_TOKEN
+            ? "Owner bootstrap token (GITHUB_BOOTSTRAP_TOKEN)"
+            : "AUTH_GITHUB_ID + AUTH_GITHUB_SECRET or GITHUB_BOOTSTRAP_TOKEN",
     },
     {
       name: "OpenRouter",
