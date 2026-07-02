@@ -15,12 +15,14 @@ import {
   getFixQueue,
 } from "@/lib/data";
 import type { CoachingSections } from "@/lib/coaching/build-coaching";
+import { requireUserId } from "@/lib/session";
 
 type Params = { params: Promise<{ id: string }> };
 
 export default async function RepoDetailPage({ params }: Params) {
+  const userId = await requireUserId();
   const { id } = await params;
-  const repo = await getRepository("demo-user", id);
+  const repo = await getRepository(userId, id);
   if (!repo) notFound();
 
   const score = await getRepoScore(id);
@@ -81,27 +83,31 @@ export default async function RepoDetailPage({ params }: Params) {
         </p>
       </Card>
 
-      <section className="space-y-4">
-        <h2 className="text-xl font-medium">AI Slop — top causes</h2>
-        <div className="grid gap-3 md:grid-cols-2">
-          {slop.topCauses.map((cause) => (
-            <Card key={cause.id}>
-              <div className="flex items-center justify-between">
-                <p className="font-medium">{cause.label}</p>
-                <Badge tone="warn">{cause.count}</Badge>
-              </div>
-              <p className="mt-2 text-xs text-zinc-500">{cause.files.slice(0, 3).join(", ")}</p>
-            </Card>
-          ))}
-        </div>
-      </section>
+      {slop.topCauses.length ? (
+        <section className="space-y-4">
+          <h2 className="text-xl font-medium">AI Slop — top causes</h2>
+          <div className="grid gap-3 md:grid-cols-2">
+            {slop.topCauses.map((cause) => (
+              <Card key={cause.id}>
+                <div className="flex items-center justify-between">
+                  <p className="font-medium">{cause.label}</p>
+                  <Badge tone="warn">{cause.count}</Badge>
+                </div>
+                <p className="mt-2 text-xs text-zinc-500">{cause.files.slice(0, 3).join(", ")}</p>
+              </Card>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
-      <section className="space-y-4">
-        <h2 className="text-xl font-medium">Top findings (coached)</h2>
-        {findings.slice(0, 3).map((f) => (
-          <CoachingCard key={f.id} title={f.title} coaching={f.coaching as CoachingSections} />
-        ))}
-      </section>
+      {findings.length ? (
+        <section className="space-y-4">
+          <h2 className="text-xl font-medium">Top findings (coached)</h2>
+          {findings.slice(0, 3).map((f) => (
+            <CoachingCard key={f.id} title={f.title} coaching={f.coaching as CoachingSections} />
+          ))}
+        </section>
+      ) : null}
     </div>
   );
 }

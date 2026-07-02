@@ -4,23 +4,36 @@ import Link from "next/link";
 import { Badge, Button, Card } from "@/components/ui";
 import { ScoreGauge } from "@/components/score-gauge";
 import { RunAuditButton } from "@/components/run-audit-button";
-import { getDashboardBriefing, getRepositories } from "@/lib/data";
+import { SyncReposButton } from "@/components/sync-repos-button";
+import { getDashboardBriefing, getRepositories, getPrimaryRepoId, getRepoScore } from "@/lib/data";
 import { isDemoMode } from "@/lib/demo/mode";
-import { demoScore } from "@/lib/demo/data";
+import { requireUserId } from "@/lib/session";
 
 export default async function DashboardPage() {
-  const userId = "demo-user";
+  const userId = await requireUserId();
   const briefing = await getDashboardBriefing(userId);
   const repos = await getRepositories(userId);
-  const primaryRepo = repos[0];
+  const primaryRepoId = await getPrimaryRepoId(userId);
+  const score = primaryRepoId ? await getRepoScore(primaryRepoId) : null;
 
   if (!briefing) {
     return (
-      <Card>
-        <p className="text-zinc-400">Sync a repository and run your first audit to get a daily briefing.</p>
-      </Card>
+      <div className="space-y-6">
+        <Card>
+          <p className="text-zinc-400">
+            {repos.length
+              ? "Run your first audit to get a daily briefing."
+              : "Sync a GitHub repository, then run your first audit."}
+          </p>
+        </Card>
+        {!isDemoMode() && !repos.length ? <SyncReposButton /> : null}
+      </div>
     );
   }
+
+  const latestAuditHref = primaryRepoId
+    ? `/dashboard/audits`
+    : "/dashboard/audits";
 
   return (
     <div className="space-y-8">
@@ -32,19 +45,21 @@ export default async function DashboardPage() {
           <p className="mt-2 max-w-2xl text-sm leading-7 text-zinc-500">{briefing.plainEnglishSummary}</p>
         </div>
         <div className="flex gap-2">
-          {primaryRepo ? (
+          {primaryRepoId ? (
             <>
-              <RunAuditButton repositoryId={primaryRepo.id} />
-              <Button href={`/dashboard/audits/demo-audit-1`} variant="secondary">
-                View report
+              <RunAuditButton repositoryId={primaryRepoId} />
+              <Button href={latestAuditHref} variant="secondary">
+                View audits
               </Button>
             </>
+          ) : !isDemoMode() ? (
+            <SyncReposButton />
           ) : null}
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <ScoreGauge score={demoScore.overall} label="Health score" />
+        <ScoreGauge score={score?.overall ?? 0} label="Health score" />
         <Card>
           <p className="text-sm text-zinc-400">Top priority today</p>
           <p className="mt-2 text-sm font-medium leading-6">

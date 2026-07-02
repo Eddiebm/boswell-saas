@@ -15,7 +15,7 @@ import {
 } from "@/lib/demo/data";
 import { answerBrainQuestion } from "@/lib/brain/answer";
 import { requireDb } from "@/lib/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import {
   auditRuns,
   findings,
@@ -23,8 +23,21 @@ import {
   memoryEvents,
   repoScores,
   repositories,
+  reports,
   scoreSnapshots,
 } from "@/lib/db/schema";
+import { getAuditForUser } from "@/lib/audits";
+import { generateAuditReport, reportToMarkdown } from "@/lib/reports/generate-report";
+import type { DailyBriefing } from "@/lib/briefing/build-briefing";
+import type { RepoScoreResult } from "@/lib/scoring/types";
+import { emptySlopResult, type SlopResult } from "@/lib/slop/engine";
+import type { AutoFixLevel } from "@/lib/automation/safe-fix-policy";
+import type { FindingClassification } from "@/lib/classification/classify";
+
+export async function getPrimaryRepoId(userId: string): Promise<string | null> {
+  const repos = await getRepositories(userId);
+  return repos[0]?.id ?? null;
+}
 
 export async function getDashboardBriefing(userId: string) {
   if (isDemoMode()) return demoBriefing;
@@ -38,17 +51,25 @@ export async function getDashboardBriefing(userId: string) {
     .from(auditRuns)
     .where(eq(auditRuns.repositoryId, repo.id))
     .orderBy(desc(auditRuns.createdAt))
-    .limit(2);
+    .limit(1);
 
   const latest = runs[0];
-  if (!latest?.briefingJson) return demoBriefing;
-  return latest.briefingJson as typeof demoBriefing;
+  if (!latest?.briefingJson) return null;
+  return latest.briefingJson as DailyBriefing;
 }
 
 export async function getRepositories(userId: string) {
   if (isDemoMode()) return demoRepos;
   const db = requireDb();
-  return db.select().from(repositories).where(eq(repositories.userId, userId));
+  const rows = await db.select().from(repositories).where(eq(repositories.userId, userId));
+  return rows.map((r) => ({
+    id: r.id,
+    fullName: r.fullName,
+    description: r.description ?? "",
+    healthScore: r.healthScore,
+    slopPercent: r.slopPercent,
+    lastAuditAt: r.lastAuditAt?.toISOString() ?? null,
+  }));
 }
 
 export async function getRepository(userId: string, repoId: string) {
@@ -57,15 +78,28 @@ export async function getRepository(userId: string, repoId: string) {
   const [repo] = await db
     .select()
     .from(repositories)
-    .where(eq(repositories.id, repoId))
+    .where(and(eq(repositories.id, repoId), eq(repositories.userId, userId)))
     .limit(1);
-  return repo ?? null;
+  if (!repo) return null;
+  return {
+    id: repo.id,
+    fullName: repo.fullName,
+    description: repo.description ?? "",
+    healthScore: repo.healthScore,
+    slopPercent: repo.slopPercent,
+    lastAuditAt: repo.lastAuditAt?.toISOString() ?? null,
+  };
 }
 
-export async function getRepoScore(repoId: string) {
+export async function getRepoScore(repoId: string): Promise<RepoScoreResult | null> {
   if (isDemoMode()) return demoScore;
   const db = requireDb();
-  const [score] = await db.select().from(repoScores).where(eq(repoScores.repositoryId, repoId)).limit(1);
+  const [score] = await db
+    .select()
+    .from(repoScores)
+    .where(eq(repoScores.repositoryId, repoId))
+    .orderBy(desc(repoScores.updatedAt))
+    .limit(1);
   if (!score) return null;
   return {
     overall: score.overall,
@@ -80,7 +114,7 @@ export async function getRepoScore(repoId: string) {
       aiSlop: score.aiSlop,
       releaseRisk: score.releaseRisk,
     },
-    grade: score.overall >= 750 ? "Healthy" : "Drifting",
+    grade: score.overall >= 750 ? "Healthy" : score.overall >= 600 ? "Drifting" : "At risk",
     summary: `Overall ${score.overall}/1000`,
   };
 }
@@ -88,57 +122,111 @@ export async function getRepoScore(repoId: string) {
 export async function getScoreHistory(repoId: string) {
   if (isDemoMode()) return demoScoreHistory;
   const db = requireDb();
-  return db
+  const rows = await db
     .select()
     .from(scoreSnapshots)
     .where(eq(scoreSnapshots.repositoryId, repoId))
     .orderBy(desc(scoreSnapshots.snapshotAt))
     .limit(12);
+  return rows.map((s) => ({
+    snapshotAt: s.snapshotAt.toISOString().slice(0, 10),
+    overall: s.overall,
+    security: s.security,
+    architecture: s.architecture,
+    aiSlop: s.aiSlop,
+  }));
 }
 
-export async function getSlop(repoId: string) {
+export async function getSlop(repoId: string): Promise<SlopResult> {
   if (isDemoMode()) return demoSlop;
   const db = requireDb();
   const [run] = await db
     .select()
     .from(auditRuns)
-    .where(eq(auditRuns.repositoryId, repoId))
+    .where(and(eq(auditRuns.repositoryId, repoId), eq(auditRuns.status, "completed")))
     .orderBy(desc(auditRuns.createdAt))
     .limit(1);
-  return (run?.slopJson as typeof demoSlop) ?? demoSlop;
+  if (!run?.slopJson) return emptySlopResult();
+  return run.slopJson as SlopResult;
 }
 
 export async function getFindings(repoId: string) {
   if (isDemoMode()) return demoFindings;
   const db = requireDb();
-  return db.select().from(findings).where(eq(findings.repositoryId, repoId));
+  const rows = await db.select().from(findings).where(eq(findings.repositoryId, repoId));
+  return rows.map((f) => ({
+    id: f.id,
+    title: f.title,
+    description: f.description,
+    severity: f.severity,
+    category: f.category,
+    filePath: f.filePath ?? undefined,
+    lineStart: f.lineStart ?? undefined,
+    status: f.status,
+    confidence: f.confidence ?? 0.8,
+    classification: (f.classification ?? "bad") as FindingClassification,
+    autoFixLevel: (f.autoFixLevel ?? "red") as AutoFixLevel,
+    coaching: f.coaching,
+    evidence: f.evidence ?? [],
+  }));
 }
 
 export async function getFixQueue(repoId: string) {
   if (isDemoMode()) return demoFixQueue;
   const db = requireDb();
-  const items = await db
+  return db
     .select()
     .from(fixQueueItems)
-    .where(eq(fixQueueItems.repositoryId, repoId));
-  return items;
+    .where(eq(fixQueueItems.repositoryId, repoId))
+    .orderBy(desc(fixQueueItems.priorityScore));
 }
 
 export async function getMemory(repoId: string) {
   if (isDemoMode()) return demoMemory;
   const db = requireDb();
-  return db
+  const rows = await db
     .select()
     .from(memoryEvents)
     .where(eq(memoryEvents.repositoryId, repoId))
     .orderBy(desc(memoryEvents.occurredAt))
     .limit(50);
+  return rows.map((e) => ({
+    id: e.id,
+    eventType: e.eventType,
+    title: e.title,
+    summary: e.summary,
+    occurredAt: e.occurredAt.toISOString(),
+  }));
 }
 
-export async function getAuditReport(auditId: string) {
+export type AuditReportView = {
+  id: string;
+  status: string;
+  error?: string | null;
+  markdown: string;
+  structured: ReturnType<typeof generateAuditReport> | null;
+  findings: Array<{
+    id: string;
+    title: string;
+    description: string;
+    severity: string;
+    classification: FindingClassification;
+    autoFixLevel: AutoFixLevel;
+    filePath?: string;
+    coaching: unknown;
+    evidence: string[];
+  }>;
+  briefing: DailyBriefing;
+  score: RepoScoreResult;
+  slop: SlopResult;
+  repoId: string;
+};
+
+export async function getAuditReport(userId: string, auditId: string): Promise<AuditReportView | null> {
   if (isDemoMode()) {
     return {
       id: auditId,
+      status: "completed",
       markdown: demoAuditMarkdown,
       structured: demoStructuredReport,
       findings: demoFindings,
@@ -148,20 +236,116 @@ export async function getAuditReport(auditId: string) {
       repoId: DEMO_REPO_ID,
     };
   }
-  return null;
+
+  const audit = await getAuditForUser(userId, auditId);
+  if (!audit) return null;
+
+  const { run, repo, findings: runFindings } = audit;
+  const db = requireDb();
+  const reportRows = await db.select().from(reports).where(eq(reports.auditRunId, auditId));
+  const primaryReport = reportRows.find((r) => r.docType === "full") ?? reportRows.find((r) => r.docType === "audit") ?? reportRows[0];
+
+  const score =
+    (run.scoresJson as RepoScoreResult | null) ??
+    (await getRepoScore(repo.id)) ?? {
+      overall: 0,
+      dimensions: {
+        security: 0,
+        architecture: 0,
+        maintainability: 0,
+        dependencies: 0,
+        testing: 0,
+        documentation: 0,
+        complexity: 0,
+        aiSlop: 0,
+        releaseRisk: 0,
+      },
+      grade: "Unknown",
+      summary: "No score yet",
+    };
+
+  const slop = (run.slopJson as SlopResult | null) ?? emptySlopResult();
+  const briefing = (run.briefingJson as DailyBriefing | null) ?? {
+    generatedAt: new Date().toISOString(),
+    greeting: "Audit in progress",
+    executiveSummary: run.summary ?? "Processing…",
+    plainEnglishSummary: run.summary ?? "",
+    whatChanged: [],
+    newRisks: [],
+    fixedRisks: [],
+    ignoredRisks: [],
+    regressions: [],
+    improvements: [],
+    classifications: { good: [], bad: [], dangerous: [], evil: [] },
+    criticalFindings: [],
+    suggestedActions: [],
+    topPriorityAction: null,
+    safePrsReady: [],
+    debtHoursEstimate: 0,
+    releaseReadiness: run.deployVerdict ?? "Pending",
+    healthDelta: null,
+  };
+
+  const mappedFindings = runFindings.map((f) => ({
+    id: f.id,
+    title: f.title,
+    description: f.description,
+    severity: f.severity,
+    classification: (f.classification ?? "bad") as FindingClassification,
+    autoFixLevel: (f.autoFixLevel ?? "red") as AutoFixLevel,
+    filePath: f.filePath ?? undefined,
+    coaching: f.coaching,
+    evidence: (f.evidence as string[] | null) ?? [],
+  }));
+
+  let structured = (primaryReport?.structured as ReturnType<typeof generateAuditReport> | null) ?? null;
+  if (!structured && run.status === "completed") {
+    const fixQueue = await getFixQueue(repo.id);
+    structured = generateAuditReport({
+      repoName: repo.fullName,
+      findings: mappedFindings.map((f) => ({
+        id: f.id,
+        title: f.title,
+        description: f.description,
+        severity: f.severity,
+        classification: f.classification,
+        filePath: f.filePath,
+        evidence: f.evidence,
+        autoFixLevel: f.autoFixLevel,
+      })),
+      score,
+      slop,
+      briefing,
+      fixQueueCount: fixQueue.length,
+    });
+  }
+
+  const markdown =
+    primaryReport?.markdown ??
+    (structured ? reportToMarkdown(structured) : audit.docs.find((d) => d.docType === "audit")?.content ?? "");
+
+  return {
+    id: auditId,
+    status: run.status,
+    error: run.error,
+    markdown,
+    structured,
+    findings: mappedFindings,
+    briefing,
+    score,
+    slop,
+    repoId: repo.id,
+  };
 }
 
-export async function askBrain(_userId: string, question: string) {
+export async function askBrain(userId: string, question: string, repoId?: string) {
   if (isDemoMode()) {
     const result = answerBrainQuestion(question, {
       repoName: "Eddiebm/audiolens-app",
       score: demoScore,
       slop: demoSlop,
       memoryEvents: demoMemory,
-      scoreHistory: demoScoreHistory.map((s) => ({
-        snapshotAt: s.snapshotAt,
-        overall: s.overall,
-      })),
+      scoreHistory: demoScoreHistory.map((s) => ({ snapshotAt: s.snapshotAt, overall: s.overall })),
       recurringFindings: ["No automated tests detected"],
       fixedFindings: ["Removed tracked .env.example secret placeholder"],
       ignoredFindings: ["Legacy console.log in API route"],
@@ -170,13 +354,74 @@ export async function askBrain(_userId: string, question: string) {
       whatChanged: demoBriefing.whatChanged,
       topActions: demoBriefing.suggestedActions.map((a) => a.title),
       authPath: "src/middleware.ts",
-      billingNote: "Stripe billing lives in the SaaS dashboard; audiolens-app has no billing module yet.",
+      billingNote: "Stripe billing lives in the SaaS dashboard.",
     });
     return result;
   }
+
+  const targetRepoId = repoId ?? (await getPrimaryRepoId(userId));
+  if (!targetRepoId) {
+    return {
+      answer: "Sync a GitHub repository first, then run an audit.",
+      evidence: [],
+    };
+  }
+
+  const repo = await getRepository(userId, targetRepoId);
+  if (!repo) {
+    return { answer: "Repository not found.", evidence: [] };
+  }
+
+  const score = (await getRepoScore(targetRepoId)) ?? demoScore;
+  const slop = await getSlop(targetRepoId);
+  const memoryEvents = await getMemory(targetRepoId);
+  const history = await getScoreHistory(targetRepoId);
+  const allFindings = await getFindings(targetRepoId);
+  const fixQueue = await getFixQueue(targetRepoId);
+  const briefing = await getDashboardBriefing(userId);
+
+  const recurring = allFindings.filter((f) => f.status === "recurring").map((f) => f.title);
+  const fixed = allFindings.filter((f) => f.status === "fixed").map((f) => f.title);
+  const ignored = allFindings.filter((f) => f.status === "ignored").map((f) => f.title);
+  const riskyFiles = [
+    ...new Set(allFindings.filter((f) => f.filePath).map((f) => f.filePath!)),
+  ].slice(0, 5);
+
+  return answerBrainQuestion(question, {
+    repoName: repo.fullName,
+    score,
+    slop,
+    memoryEvents,
+    scoreHistory: history.map((h) => ({ snapshotAt: h.snapshotAt, overall: h.overall })),
+    recurringFindings: recurring,
+    fixedFindings: fixed,
+    ignoredFindings: ignored,
+    riskyFiles,
+    briefingSummary: briefing?.executiveSummary ?? "Run an audit to build repository memory.",
+    whatChanged: briefing?.whatChanged ?? [],
+    topActions: fixQueue.slice(0, 5).map((q) => q.title),
+    authPath: riskyFiles.find((f) => f.includes("middleware")) ?? "src/middleware.ts",
+    billingNote: "Check /dashboard/billing for Stripe configuration.",
+  });
+}
+
+export async function getWorkerHealth() {
+  if (isDemoMode()) {
+    return { queuedAudits: 0, runningAudits: 0, failedAudits: 0 };
+  }
+  const db = requireDb();
+  const queued = await db.select().from(auditRuns).where(eq(auditRuns.status, "queued"));
+  const running = await db.select().from(auditRuns).where(eq(auditRuns.status, "running"));
+  const failed = await db
+    .select()
+    .from(auditRuns)
+    .where(eq(auditRuns.status, "failed"))
+    .orderBy(desc(auditRuns.createdAt))
+    .limit(5);
   return {
-    answer: "Connect a repository and run an audit to enable evidence-backed Q&A.",
-    evidence: [],
+    queuedAudits: queued.length,
+    runningAudits: running.length,
+    recentFailures: failed.map((f) => ({ id: f.id, error: f.error })),
   };
 }
 

@@ -2,18 +2,30 @@ export const dynamic = "force-dynamic";
 
 import { Card } from "@/components/ui";
 import { BrainChat } from "@/components/brain-chat";
-import { getMemory, DEMO_REPO_ID } from "@/lib/data";
+import { getMemory, getPrimaryRepoId } from "@/lib/data";
+import { requireUserId } from "@/lib/session";
 
 const memoryPrompts = [
   "What keeps getting worse?",
   "What did we fix?",
   "What have we ignored?",
-  "What changed since last month?",
-  "Why is this repo riskier now?",
+  "What changed since last audit?",
+  "Which files are repeatedly risky?",
 ];
 
 export default async function MemoryPage() {
-  const events = await getMemory(DEMO_REPO_ID);
+  const userId = await requireUserId();
+  const repoId = await getPrimaryRepoId(userId);
+
+  if (!repoId) {
+    return (
+      <Card>
+        <p className="text-zinc-400">Sync a repository and run audits to build engineering memory.</p>
+      </Card>
+    );
+  }
+
+  const events = await getMemory(repoId);
 
   return (
     <div className="space-y-8">
@@ -38,13 +50,19 @@ export default async function MemoryPage() {
 
       <section className="space-y-3">
         <h2 className="text-xl font-medium">Timeline</h2>
-        {events.map((event) => (
-          <Card key={event.id}>
-            <p className="text-xs text-zinc-500">{String(event.occurredAt)}</p>
-            <p className="mt-1 font-medium">{event.title}</p>
-            <p className="mt-1 text-sm text-zinc-400">{event.summary}</p>
+        {events.length ? (
+          events.map((event) => (
+            <Card key={event.id}>
+              <p className="text-xs text-zinc-500">{String(event.occurredAt)}</p>
+              <p className="mt-1 font-medium">{event.title}</p>
+              <p className="mt-1 text-sm text-zinc-400">{event.summary}</p>
+            </Card>
+          ))
+        ) : (
+          <Card>
+            <p className="text-sm text-zinc-400">No memory events yet.</p>
           </Card>
-        ))}
+        )}
       </section>
     </div>
   );

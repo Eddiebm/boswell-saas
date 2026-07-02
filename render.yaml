@@ -1,14 +1,18 @@
 services:
-  - type: web
-    name: boswell-worker
+  - type: worker
+    name: boswell-audit-worker
     runtime: node
     plan: starter
-    buildCommand: npm install
+    buildCommand: npm install && apt-get update && apt-get install -y git python3 python3-pip
     startCommand: npm run worker
     envVars:
       - key: DATABASE_URL
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
+      - key: WORKER_SECRET
+        sync: false
+      - key: BOSWELL_ENGINE_GIT_URL
+        value: git+https://github.com/Eddiebm/boswell.git
       - key: NODE_VERSION
         value: "24"

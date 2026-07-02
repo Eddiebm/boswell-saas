@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { listAuditsForUser, queueAudit } from "@/lib/audits";
-import { processWorkerTick } from "@/lib/audits";
 
 export async function GET() {
   const session = await auth();
@@ -26,8 +25,10 @@ export async function POST(request: Request) {
 
   try {
     const run = await queueAudit(session.user.id, body.repositoryId);
-    void processWorkerTick();
-    return NextResponse.json({ audit: run });
+    return NextResponse.json({
+      audit: run,
+      message: "Audit queued. Ensure npm run worker is running to process it.",
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to queue audit";
     return NextResponse.json({ error: message }, { status: 400 });

@@ -25,6 +25,7 @@ import {
   type PlanId,
 } from "@/lib/plans";
 import { processAuditJob } from "@/lib/worker/process-audit";
+import { generateAuditReport, reportToMarkdown } from "@/lib/reports/generate-report";
 
 export async function listAuditsForUser(userId: string) {
   const db = requireDb();
@@ -239,35 +240,6 @@ export async function runQueuedAudit(auditId: string) {
     );
 
     const score = computeRepoScore(result.scoreInput);
-    await db.insert(repoScores).values({
-      repositoryId: repo.id,
-      overall: score.overall,
-      security: score.dimensions.security,
-      architecture: score.dimensions.architecture,
-      maintainability: score.dimensions.maintainability,
-      dependencies: score.dimensions.dependencies,
-      testing: score.dimensions.testing,
-      documentation: score.dimensions.documentation,
-      complexity: score.dimensions.complexity,
-      aiSlop: score.dimensions.aiSlop,
-      releaseRisk: score.dimensions.releaseRisk,
-      details: score,
-    });
-
-    await db.insert(scoreSnapshots).values({
-      repositoryId: repo.id,
-      auditRunId: run.id,
-      overall: score.overall,
-      security: score.dimensions.security,
-      architecture: score.dimensions.architecture,
-      maintainability: score.dimensions.maintainability,
-      dependencies: score.dimensions.dependencies,
-      testing: score.dimensions.testing,
-      documentation: score.dimensions.documentation,
-      complexity: score.dimensions.complexity,
-      aiSlop: score.dimensions.aiSlop,
-      releaseRisk: score.dimensions.releaseRisk,
-    });
 
     const classified = groupByClassification(
       result.findings.map((f) => ({
@@ -302,7 +274,15 @@ export async function runQueuedAudit(auditId: string) {
         evil: classified.evil.map((f) => f.title),
       },
       safePrTitles: result.findings
-        .filter((f) => enrichFinding({ title: f.title, description: f.description, severity: f.severity, category: f.category }).autoFixLevel === "green")
+        .filter(
+          (f) =>
+            enrichFinding({
+              title: f.title,
+              description: f.description,
+              severity: f.severity,
+              category: f.category,
+            }).autoFixLevel === "green",
+        )
         .map((f) => f.title),
       slop: result.slop,
       deployVerdict: result.deployVerdict,
@@ -311,19 +291,97 @@ export async function runQueuedAudit(auditId: string) {
     const queue = prioritizeFixQueue(
       result.findings
         .filter((f) => f.severity !== "INFO")
-        .map((f) => ({
+        .map((f) => {
+          const enriched = enrichFinding({
+            title: f.title,
+            description: f.description,
+            severity: f.severity,
+            category: f.category,
+          });
+          return {
+            id: f.title,
+            title: f.title,
+            severity: f.severity,
+            effort: f.severity === "HIGH" ? ("m" as const) : ("s" as const),
+            impact: f.severity === "CRITICAL" ? ("critical" as const) : ("high" as const),
+            files: f.filePath ? [f.filePath] : [],
+            whyItMatters: f.description,
+            suggestedFix: f.recommendation ?? "Review manually",
+            canAutoPr: enriched.canOpenPr,
+            category: f.category,
+          };
+        }),
+    );
+
+    const structuredReport = generateAuditReport({
+      repoName: repo.fullName,
+      findings: result.findings.map((f) => {
+        const enriched = enrichFinding({
+          title: f.title,
+          description: f.description,
+          severity: f.severity,
+          category: f.category,
+        });
+        return {
           id: f.title,
           title: f.title,
+          description: f.description,
           severity: f.severity,
-          effort: f.severity === "HIGH" ? "m" : "s",
-          impact: f.severity === "CRITICAL" ? "critical" : "high",
-          files: f.filePath ? [f.filePath] : [],
-          whyItMatters: f.description,
-          suggestedFix: f.recommendation ?? "Review manually",
-          canAutoPr: f.category === "documentation",
-          category: f.category,
-        })),
-    );
+          classification: enriched.classification,
+          filePath: f.filePath,
+          evidence: f.filePath ? [`${f.filePath}:${f.lineStart ?? 1}`] : [],
+          autoFixLevel: enriched.autoFixLevel,
+        };
+      }),
+      score,
+      slop: result.slop,
+      briefing,
+      fixQueueCount: queue.length,
+    });
+
+    const fullMarkdown = reportToMarkdown(structuredReport);
+
+    await db.insert(reports).values({
+      auditRunId: run.id,
+      docType: "full",
+      markdown: fullMarkdown,
+      structured: structuredReport,
+    });
+
+    await db.delete(repoScores).where(eq(repoScores.repositoryId, repo.id));
+    await db.insert(repoScores).values({
+      repositoryId: repo.id,
+      overall: score.overall,
+      security: score.dimensions.security,
+      architecture: score.dimensions.architecture,
+      maintainability: score.dimensions.maintainability,
+      dependencies: score.dimensions.dependencies,
+      testing: score.dimensions.testing,
+      documentation: score.dimensions.documentation,
+      complexity: score.dimensions.complexity,
+      aiSlop: score.dimensions.aiSlop,
+      releaseRisk: score.dimensions.releaseRisk,
+      details: score,
+    });
+
+    await db.insert(scoreSnapshots).values({
+      repositoryId: repo.id,
+      auditRunId: run.id,
+      overall: score.overall,
+      security: score.dimensions.security,
+      architecture: score.dimensions.architecture,
+      maintainability: score.dimensions.maintainability,
+      dependencies: score.dimensions.dependencies,
+      testing: score.dimensions.testing,
+      documentation: score.dimensions.documentation,
+      complexity: score.dimensions.complexity,
+      aiSlop: score.dimensions.aiSlop,
+      releaseRisk: score.dimensions.releaseRisk,
+    });
+
+    await db
+      .delete(fixQueueItems)
+      .where(and(eq(fixQueueItems.repositoryId, repo.id), eq(fixQueueItems.status, "pending")));
 
     if (queue.length) {
       await db.insert(fixQueueItems).values(

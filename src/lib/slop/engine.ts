@@ -15,6 +15,17 @@ export type SlopResult = {
   signals: SlopSignal[];
 };
 
+export function emptySlopResult(): SlopResult {
+  return {
+    overallPercent: 0,
+    humanReviewConfidence: 100,
+    topCauses: [],
+    affectedFiles: [],
+    recommendedFixes: [],
+    signals: [],
+  };
+}
+
 export type SlopScanInput = {
   files: Array<{ path: string; content: string; lines: number }>;
 };

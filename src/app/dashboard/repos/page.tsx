@@ -3,11 +3,15 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { Card } from "@/components/ui";
 import { ScoreGauge } from "@/components/score-gauge";
-import { getRepositories, getRepoScore, getSlop } from "@/lib/data";
 import { RunAuditButton } from "@/components/run-audit-button";
+import { SyncReposButton } from "@/components/sync-repos-button";
+import { getRepositories, getRepoScore, getSlop } from "@/lib/data";
+import { requireUserId } from "@/lib/session";
+import { isDemoMode } from "@/lib/demo/mode";
 
 export default async function ReposPage() {
-  const repos = await getRepositories("demo-user");
+  const userId = await requireUserId();
+  const repos = await getRepositories(userId);
   const enriched = await Promise.all(
     repos.map(async (repo) => ({
       repo,
@@ -18,10 +22,19 @@ export default async function ReposPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-semibold">Repositories</h1>
-        <p className="mt-2 text-zinc-400">Health scores and slop levels for each watched repo.</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold">Repositories</h1>
+          <p className="mt-2 text-zinc-400">Health scores and slop levels for each watched repo.</p>
+        </div>
+        {!isDemoMode() ? <SyncReposButton /> : null}
       </div>
+
+      {!repos.length ? (
+        <Card>
+          <p className="text-zinc-400">No repositories yet. Sync from GitHub to get started.</p>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4">
         {enriched.map(({ repo, score, slop }) => (

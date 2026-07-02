@@ -1,15 +1,13 @@
 export const dynamic = "force-dynamic";
 
 import { Card } from "@/components/ui";
+import { getEnvChecks } from "@/lib/env";
+import { getWorkerHealth } from "@/lib/data";
+import { isDemoMode } from "@/lib/demo/mode";
 
-export default function AdminPage() {
-  const checks = [
-    { name: "Web app", status: "ok", detail: "Next.js build passing" },
-    { name: "Database", status: process.env.DATABASE_URL ? "ok" : "demo", detail: process.env.DATABASE_URL ? "Neon connected" : "Demo mode (no DATABASE_URL)" },
-    { name: "OpenRouter", status: process.env.OPENROUTER_API_KEY ? "ok" : "missing", detail: "Required for live audits" },
-    { name: "Worker", status: "manual", detail: "Run npm run worker or deploy render.yaml" },
-    { name: "GitHub OAuth", status: process.env.AUTH_GITHUB_ID ? "ok" : "missing", detail: "Required for sign-in" },
-  ];
+export default async function AdminPage() {
+  const checks = getEnvChecks();
+  const worker = isDemoMode() ? null : await getWorkerHealth();
 
   return (
     <div className="space-y-8">
@@ -35,6 +33,26 @@ export default function AdminPage() {
           </Card>
         ))}
       </div>
+
+      {worker ? (
+        <Card>
+          <h2 className="mb-3 font-medium">Audit queue</h2>
+          <p className="text-sm text-zinc-400">Queued: {worker.queuedAudits}</p>
+          <p className="text-sm text-zinc-400">Running: {worker.runningAudits}</p>
+          {worker.recentFailures?.length ? (
+            <div className="mt-3">
+              <p className="text-sm font-medium text-red-300">Recent failures</p>
+              <ul className="mt-2 space-y-1 text-xs text-zinc-500">
+                {worker.recentFailures.map((f) => (
+                  <li key={f.id}>
+                    {f.id}: {f.error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
     </div>
   );
 }

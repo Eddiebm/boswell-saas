@@ -32,15 +32,19 @@ Open http://localhost:3000 → **Open demo dashboard**
 
 Demo mode activates when `BOSWELL_DEMO=1` or `DATABASE_URL` is unset.
 
-## Full local setup
+## Full local setup (live audits)
+
+See **[docs/live-audit-setup.md](docs/live-audit-setup.md)** for the complete guide.
 
 ```bash
 cp .env.example .env.local
-# Fill DATABASE_URL, AUTH_GITHUB_*, OPENROUTER_API_KEY
+# Fill DATABASE_URL, AUTH_*, OPENROUTER_API_KEY, WORKER_SECRET
 npm run db:push
-npm run dev:live
-npm run worker   # separate terminal — processes audit jobs
+npm run dev:live    # NOT npm run dev (that enables demo mode)
+npm run worker      # separate terminal — required for audits
 ```
+
+Sign in → Sync repos → Run audit. The worker processes queued jobs; Vercel cannot run audits.
 
 ## Tests
 
