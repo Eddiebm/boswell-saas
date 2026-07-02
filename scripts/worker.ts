@@ -1,8 +1,22 @@
+import http from "node:http";
 import { processWorkerTick } from "../src/lib/audits";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function startHealthServer() {
+  const port = Number(process.env.PORT ?? 10000);
+  http
+    .createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end("boswell-worker-ok");
+    })
+    .listen(port, "0.0.0.0", () => {
+      console.log(`Health server listening on ${port}`);
+    });
+}
+
 async function main() {
+  startHealthServer();
   console.log("Boswell worker started");
   while (true) {
     try {

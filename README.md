@@ -21,6 +21,15 @@ Boswell watches your repositories, understands what changed, remembers engineeri
 | GitHub OAuth + audits | **Requires env** |
 | Stripe billing | **Requires env** |
 
+## Deployed
+
+| Service | URL |
+|---------|-----|
+| **Web (Vercel)** | https://boswell-saas.vercel.app |
+| **Worker (Render)** | Deploy via [Render Blueprint](https://dashboard.render.com/select-repo?type=blueprint) → connect this repo |
+
+See **[docs/deployment-checklist.md](docs/deployment-checklist.md)** for required environment variables.
+
 ## Quick start (no credentials)
 
 ```bash

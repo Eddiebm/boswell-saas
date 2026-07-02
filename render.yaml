@@ -1,10 +1,10 @@
 services:
   - type: worker
     name: boswell-audit-worker
-    runtime: node
+    runtime: docker
+    dockerfilePath: ./Dockerfile.worker
     plan: starter
-    buildCommand: npm install && apt-get update && apt-get install -y git python3 python3-pip
-    startCommand: npm run worker
+    region: oregon
     envVars:
       - key: DATABASE_URL
         sync: false
@@ -14,5 +14,5 @@ services:
         sync: false
       - key: BOSWELL_ENGINE_GIT_URL
         value: git+https://github.com/Eddiebm/boswell.git
-      - key: NODE_VERSION
-        value: "24"
+      - key: NODE_ENV
+        value: production
