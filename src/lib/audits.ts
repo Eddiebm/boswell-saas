@@ -4,9 +4,18 @@ import {
   auditDocuments,
   auditRuns,
   findings,
+  fixQueueItems,
+  memoryEvents,
+  reports,
+  repoScores,
   repositories,
+  scoreSnapshots,
   users,
 } from "@/lib/db/schema";
+import { buildCoaching } from "@/lib/coaching/build-coaching";
+import { buildDailyBriefing } from "@/lib/briefing/build-briefing";
+import { prioritizeFixQueue } from "@/lib/fix-queue/prioritize";
+import { computeRepoScore } from "@/lib/scoring/engine";
 import { getGithubToken } from "@/lib/github";
 import {
   currentMonthKey,
@@ -182,17 +191,125 @@ export async function runQueuedAudit(auditId: string) {
     if (result.findings.length) {
       await db.insert(findings).values(
         result.findings.map((f) => ({
+          repositoryId: repo.id,
           auditRunId: run.id,
           severity: f.severity,
           category: f.category,
           title: f.title,
           description: f.description,
           filePath: f.filePath,
-          lineNumber: f.lineNumber,
+          lineStart: f.lineStart,
           recommendation: f.recommendation,
+          coaching: buildCoaching({
+            title: f.title,
+            description: f.description,
+            severity: f.severity,
+            category: f.category,
+            filePath: f.filePath,
+            recommendation: f.recommendation,
+          }),
+          confidence: 0.85,
+          autoFixable: f.category === "documentation",
         })),
       );
     }
+
+    await db.insert(reports).values(
+      Object.entries(result.documents).map(([docType, markdown]) => ({
+        auditRunId: run.id,
+        docType,
+        markdown,
+      })),
+    );
+
+    const score = computeRepoScore(result.scoreInput);
+    await db.insert(repoScores).values({
+      repositoryId: repo.id,
+      overall: score.overall,
+      security: score.dimensions.security,
+      architecture: score.dimensions.architecture,
+      maintainability: score.dimensions.maintainability,
+      dependencies: score.dimensions.dependencies,
+      testing: score.dimensions.testing,
+      documentation: score.dimensions.documentation,
+      complexity: score.dimensions.complexity,
+      aiSlop: score.dimensions.aiSlop,
+      releaseRisk: score.dimensions.releaseRisk,
+      details: score,
+    });
+
+    await db.insert(scoreSnapshots).values({
+      repositoryId: repo.id,
+      auditRunId: run.id,
+      overall: score.overall,
+      security: score.dimensions.security,
+      architecture: score.dimensions.architecture,
+      maintainability: score.dimensions.maintainability,
+      dependencies: score.dimensions.dependencies,
+      testing: score.dimensions.testing,
+      documentation: score.dimensions.documentation,
+      complexity: score.dimensions.complexity,
+      aiSlop: score.dimensions.aiSlop,
+      releaseRisk: score.dimensions.releaseRisk,
+    });
+
+    const briefing = buildDailyBriefing({
+      repoName: repo.fullName,
+      currentScore: score,
+      newFindings: result.findings
+        .filter((f) => f.severity === "HIGH" || f.severity === "CRITICAL")
+        .map((f) => ({
+          id: f.title,
+          title: f.title,
+          severity: f.severity,
+          href: `/dashboard/audits/${run.id}`,
+        })),
+      fixedFindings: [],
+      recurringFindings: [],
+      slop: result.slop,
+      deployVerdict: result.deployVerdict,
+    });
+
+    const queue = prioritizeFixQueue(
+      result.findings
+        .filter((f) => f.severity !== "INFO")
+        .map((f) => ({
+          id: f.title,
+          title: f.title,
+          severity: f.severity,
+          effort: f.severity === "HIGH" ? "m" : "s",
+          impact: f.severity === "CRITICAL" ? "critical" : "high",
+          files: f.filePath ? [f.filePath] : [],
+          whyItMatters: f.description,
+          suggestedFix: f.recommendation ?? "Review manually",
+          canAutoPr: f.category === "documentation",
+          category: f.category,
+        })),
+    );
+
+    if (queue.length) {
+      await db.insert(fixQueueItems).values(
+        queue.map((q) => ({
+          repositoryId: repo.id,
+          title: q.title,
+          severity: q.severity,
+          effort: q.effort,
+          impact: q.impact,
+          files: q.files,
+          whyItMatters: q.whyItMatters,
+          suggestedFix: q.suggestedFix,
+          canAutoPr: q.canAutoPr,
+          priorityScore: q.priorityScore,
+        })),
+      );
+    }
+
+    await db.insert(memoryEvents).values({
+      repositoryId: repo.id,
+      eventType: "audit_completed",
+      title: `Audit completed for ${repo.fullName}`,
+      summary: briefing.executiveSummary,
+    });
 
     await db
       .update(auditRuns)
@@ -204,12 +321,19 @@ export async function runQueuedAudit(auditId: string) {
         summary: result.summary,
         deployVerdict: result.deployVerdict,
         topRisk: result.topRisk,
+        briefingJson: briefing,
+        slopJson: result.slop,
+        scoresJson: score,
       })
       .where(eq(auditRuns.id, run.id));
 
     await db
       .update(repositories)
-      .set({ lastAuditAt: new Date() })
+      .set({
+        lastAuditAt: new Date(),
+        healthScore: score.overall,
+        slopPercent: result.slop.overallPercent,
+      })
       .where(eq(repositories.id, repo.id));
 
     await incrementAuditUsage(run.userId);

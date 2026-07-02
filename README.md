@@ -1,54 +1,81 @@
-# Boswell Cloud
+# Boswell — AI Engineering CTO
 
-Hosted SaaS for the [Boswell](https://github.com/Eddiebm/boswell) repo auditor.
+Boswell watches your repositories, understands what changed, remembers engineering decisions, scores code health, and tells you exactly what to fix next.
 
-## Stack
+## What works today
 
-- Next.js 16 (App Router)
-- NextAuth (GitHub OAuth)
-- Neon Postgres + Drizzle ORM
-- Stripe subscriptions
-- Boswell Python engine (installed at worker runtime)
-- Render worker for long-running audits
+| Feature | Status |
+|---------|--------|
+| Daily CTO Briefing | **Demo + live** (after audit) |
+| Health score 0–1000 (9 dimensions) | **Deterministic engine** |
+| AI Slop Score | **Deterministic scanner** |
+| Engineering Memory | **Demo + DB-backed events** |
+| Fix Queue prioritization | **Implemented** |
+| Engineering Brain Q&A | **Demo templates** (LLM optional later) |
+| Coaching sections per finding | **Implemented** |
+| PR mode (no push to main) | **API stub + policy** |
+| GitHub OAuth + audits | **Requires env** |
+| Stripe billing | **Requires env** |
 
-## Features
-
-- GitHub sign-in and repo sync
-- Queue cloud audits per repository
-- View findings, audit reports, and handoff docs
-- Free / Pro / Team plans with usage limits
-- Stripe billing for paid tiers
-
-## Local development
+## Quick start (no credentials)
 
 ```bash
-cp .env.example .env.local
 npm install
-npm run db:push
 npm run dev
 ```
 
-In another terminal, run the audit worker:
+Open http://localhost:3000 → **Open demo dashboard**
+
+Demo mode activates when `BOSWELL_DEMO=1` or `DATABASE_URL` is unset.
+
+## Full local setup
 
 ```bash
-npm run worker
+cp .env.example .env.local
+# Fill DATABASE_URL, AUTH_GITHUB_*, OPENROUTER_API_KEY
+npm run db:push
+npm run dev:live
+npm run worker   # separate terminal — processes audit jobs
 ```
 
-## Environment variables
+## Tests
 
-See `.env.example`.
+```bash
+npm test
+```
 
-## Deployment
+Covers: scoring engine, audit markdown parser, fix-queue prioritization, AI slop scanner.
 
-1. Deploy web app to **Vercel**
-2. Deploy worker to **Render** using `render.yaml`
-3. Create a GitHub OAuth app with callback:
-   `https://your-domain/api/auth/callback/github`
-4. Create Stripe products/prices and set webhook to:
-   `https://your-domain/api/stripe/webhook`
-5. Set `WORKER_SECRET` on Vercel and pass it as `x-worker-secret` header from Render cron (optional fallback)
+## Architecture
+
+- **Web:** Next.js 16 App Router on Vercel
+- **DB:** Neon Postgres + Drizzle ORM
+- **Auth:** NextAuth (GitHub)
+- **Audits:** Boswell Python engine via background worker (`npm run worker`)
+- **Scoring:** TypeScript deterministic weights (LLM explains, does not invent scores)
+
+## Pages
+
+- `/` — Landing
+- `/dashboard` — Daily CTO Briefing
+- `/dashboard/executive` — Founder summary
+- `/dashboard/repos` — Repository list + scores
+- `/dashboard/repos/[id]` — Detail, slop, timeline
+- `/dashboard/audits/[id]` — Report + coaching
+- `/dashboard/fix-queue` — Prioritized work
+- `/dashboard/memory` — Engineering memory
+- `/dashboard/brain` — Q&A
+- `/dashboard/settings` — Config
+- `/dashboard/billing` — Plans
+- `/dashboard/admin` — System health
 
 ## Repos
 
 - Engine: https://github.com/Eddiebm/boswell
 - SaaS: https://github.com/Eddiebm/boswell-saas
+
+## Honest limitations
+
+- Engineering Brain uses grounded templates in demo; production LLM Q&A needs `OPENROUTER_API_KEY` wiring.
+- Safe-fix PR creation is simulated in demo; live PRs need GitHub token + implementation in `/api/pr/create`.
+- Vercel cannot run long Python audits — use Render worker (`render.yaml`).

@@ -2,24 +2,27 @@ import Link from "next/link";
 import { auth, signIn } from "@/lib/auth";
 import { Button, Card } from "@/components/ui";
 import { publicPlanSummary } from "@/lib/stripe";
+import { isDemoMode } from "@/lib/demo/mode";
 
 export default async function HomePage() {
   const session = await auth();
+  const demo = isDemoMode();
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#1f2937_0%,#000_55%)] text-white">
       <main className="mx-auto flex max-w-6xl flex-col gap-16 px-6 py-20">
         <section className="max-w-3xl">
-          <p className="mb-4 text-sm uppercase tracking-[0.2em] text-zinc-400">Boswell Cloud</p>
+          <p className="mb-4 text-sm uppercase tracking-[0.2em] text-zinc-400">Boswell</p>
           <h1 className="text-5xl font-semibold tracking-tight">
-            Turn any GitHub repo into a security audit and handoff report.
+            Your AI Engineering CTO — watches repos, remembers decisions, tells you what to fix next.
           </h1>
           <p className="mt-6 text-lg leading-8 text-zinc-300">
-            Connect GitHub, run Boswell in the cloud, and get audit docs, leak findings,
-            deploy verdicts, and handoff reports without installing anything locally.
+            Daily briefings, health scores, AI slop detection, engineering memory, and a prioritized fix queue — grounded in your actual code.
           </p>
-          <div className="mt-8 flex gap-4">
-            {session ? (
+          <div className="mt-8 flex flex-wrap gap-4">
+            {demo ? (
+              <Button href="/dashboard">Open demo dashboard</Button>
+            ) : session ? (
               <Button href="/dashboard">Open dashboard</Button>
             ) : (
               <form
@@ -32,16 +35,16 @@ export default async function HomePage() {
               </form>
             )}
             <Button href="#pricing" variant="secondary">
-              View pricing
+              Pricing
             </Button>
           </div>
         </section>
 
         <section className="grid gap-4 md:grid-cols-3">
           {[
-            ["Leak scan", "Git history, working tree, and gitignore coverage."],
-            ["AI audit", "Technical audit, handoff docs, and lessons learned."],
-            ["SaaS dashboard", "Track repos, audits, findings, and billing in one place."],
+            ["Daily CTO Briefing", "Morning summary of changes, risks, and today's actions."],
+            ["Health score 0–1000", "Nine dimensions with trends over time."],
+            ["AI Slop Score", "Detect careless AI-generated patterns and share results."],
           ].map(([title, body]) => (
             <Card key={title}>
               <h2 className="text-lg font-medium">{title}</h2>

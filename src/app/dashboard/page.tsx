@@ -1,93 +1,131 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { auth } from "@/lib/auth";
-import { listAuditsForUser } from "@/lib/audits";
-import { listRepositoriesForUser } from "@/lib/repositories";
-import { requireDb } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { getPlanLimits, type PlanId } from "@/lib/plans";
-import { AuditStatusBadge } from "@/components/audit-status-badge";
-import { Card } from "@/components/ui";
-import { SyncReposButton } from "@/components/sync-repos-button";
+import { Badge, Button, Card } from "@/components/ui";
+import { ScoreGauge } from "@/components/score-gauge";
+import { RunAuditButton } from "@/components/run-audit-button";
+import { getDashboardBriefing, getRepositories, DEMO_REPO_ID } from "@/lib/data";
+import { isDemoMode } from "@/lib/demo/mode";
+import { demoScore } from "@/lib/demo/data";
 
 export default async function DashboardPage() {
-  const session = await auth();
-  const userId = session?.user?.id;
-  if (!userId) return null;
+  const userId = "demo-user";
+  const briefing = await getDashboardBriefing(userId);
+  const repos = await getRepositories(userId);
+  const primaryRepo = repos[0];
 
-  const db = requireDb();
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  const plan = (user?.plan ?? "free") as PlanId;
-  const limits = getPlanLimits(plan);
-  const repos = await listRepositoriesForUser(userId);
-  const audits = await listAuditsForUser(userId);
+  if (!briefing) {
+    return (
+      <Card>
+        <p className="text-zinc-400">Sync a repository and run your first audit to get a daily briefing.</p>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-semibold">Dashboard</h1>
-        <p className="mt-2 text-zinc-400">
-          Plan: {limits.name} · {user?.auditsUsedThisMonth ?? 0}/{limits.auditsPerMonth} audits
-          this month
-        </p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <p className="text-sm text-zinc-400">Repositories</p>
-          <p className="mt-2 text-3xl font-semibold">{repos.length}</p>
-        </Card>
-        <Card>
-          <p className="text-sm text-zinc-400">Audits</p>
-          <p className="mt-2 text-3xl font-semibold">{audits.length}</p>
-        </Card>
-        <Card>
-          <p className="text-sm text-zinc-400">Plan limit</p>
-          <p className="mt-2 text-3xl font-semibold">{limits.maxRepos} repos</p>
-        </Card>
-      </div>
-
-      <Card>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-medium">Get started</h2>
-            <p className="mt-1 text-sm text-zinc-400">
-              Sync repositories from GitHub, then run your first audit.
-            </p>
-          </div>
-          <SyncReposButton />
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm uppercase tracking-widest text-zinc-500">Daily CTO Briefing</p>
+          <h1 className="mt-2 text-3xl font-semibold">{briefing.greeting}</h1>
+          <p className="mt-3 max-w-2xl text-zinc-400">{briefing.executiveSummary}</p>
         </div>
-      </Card>
-
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-medium">Recent audits</h2>
-          <Link href="/dashboard/audits" className="text-sm text-zinc-400 hover:text-white">
-            View all
-          </Link>
-        </div>
-        <div className="space-y-3">
-          {audits.slice(0, 5).map((audit) => (
-            <Card key={audit.id} className="flex items-center justify-between gap-4 py-4">
-              <div>
-                <p className="font-medium">{audit.repoFullName}</p>
-                <p className="text-sm text-zinc-400">{audit.summary ?? "Queued audit"}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <AuditStatusBadge status={audit.status} />
-                <Link href={`/dashboard/audits/${audit.id}`} className="text-sm underline">
-                  Open
-                </Link>
-              </div>
-            </Card>
-          ))}
-          {audits.length === 0 ? (
-            <p className="text-sm text-zinc-500">No audits yet.</p>
+        <div className="flex gap-2">
+          {primaryRepo ? (
+            <>
+              <RunAuditButton repositoryId={primaryRepo.id} />
+              <Button href={`/dashboard/audits/demo-audit-1`} variant="secondary">
+                View report
+              </Button>
+            </>
           ) : null}
         </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <ScoreGauge score={demoScore.overall} label="Health score" />
+        <Card>
+          <p className="text-sm text-zinc-400">Release readiness</p>
+          <p className="mt-2 text-lg font-medium">{briefing.releaseReadiness}</p>
+        </Card>
+        <Card>
+          <p className="text-sm text-zinc-400">Health delta</p>
+          <p className="mt-2 text-lg font-medium">
+            {briefing.healthDelta == null
+              ? "—"
+              : briefing.healthDelta >= 0
+                ? `+${briefing.healthDelta}`
+                : briefing.healthDelta}
+          </p>
+        </Card>
+        <Card>
+          <p className="text-sm text-zinc-400">Repos watched</p>
+          <p className="mt-2 text-3xl font-semibold">{repos.length}</p>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <BriefingList title="What changed" items={briefing.whatChanged} />
+        <BriefingList title="New risks" items={briefing.newRisks} tone="bad" />
+        <BriefingList title="Regressions" items={briefing.regressions} tone="warn" />
+        <BriefingList title="Improvements" items={briefing.improvements} tone="good" />
+      </div>
+
+      <section className="space-y-4">
+        <h2 className="text-xl font-medium">Suggested actions for today</h2>
+        <div className="space-y-3">
+          {briefing.suggestedActions.map((action) => (
+            <Card key={action.id} className="flex items-center justify-between gap-4 py-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Badge tone={action.severity === "HIGH" || action.severity === "CRITICAL" ? "bad" : "warn"}>
+                    {action.severity}
+                  </Badge>
+                  <p className="font-medium">{action.title}</p>
+                </div>
+                <p className="mt-1 text-sm text-zinc-500">Est. effort: {action.effort}</p>
+              </div>
+              <Link href={action.href} className="text-sm underline">
+                Open
+              </Link>
+            </Card>
+          ))}
+        </div>
       </section>
+
+      {isDemoMode() ? (
+        <Card className="border-amber-500/20 bg-amber-500/5 text-sm text-amber-200">
+          Demo mode is active — data is seeded locally. Connect Neon + GitHub for live repositories.
+        </Card>
+      ) : null}
     </div>
+  );
+}
+
+function BriefingList({
+  title,
+  items,
+  tone = "neutral",
+}: {
+  title: string;
+  items: string[];
+  tone?: "neutral" | "good" | "warn" | "bad";
+}) {
+  return (
+    <Card>
+      <h3 className="font-medium">{title}</h3>
+      <ul className="mt-3 space-y-2 text-sm text-zinc-400">
+        {items.length ? (
+          items.map((item) => (
+            <li key={item} className="flex gap-2">
+              <Badge tone={tone}>•</Badge>
+              <span>{item}</span>
+            </li>
+          ))
+        ) : (
+          <li>Nothing notable.</li>
+        )}
+      </ul>
+    </Card>
   );
 }

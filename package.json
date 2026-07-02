@@ -3,17 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "BOSWELL_DEMO=1 next dev",
+    "dev:live": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
+    "db:seed": "tsx scripts/seed.ts",
     "worker": "tsx scripts/worker.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.2",
     "@neondatabase/serverless": "^1.1.0",
+    "@vitest/coverage-v8": "^4.1.9",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.4.0",
     "drizzle-orm": "^0.45.2",
@@ -24,6 +29,7 @@
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
     "stripe": "^22.3.0",
+    "vitest": "^4.1.9",
     "zod": "^4.4.3"
   },
   "devDependencies": {

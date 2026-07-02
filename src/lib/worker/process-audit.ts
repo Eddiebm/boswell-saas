@@ -1,3 +1,6 @@
+import { parseAuditMarkdown, parseLeakMetadata } from "@/lib/parsers/audit-parser";
+import { scanAiSlop, type SlopResult } from "@/lib/slop/engine";
+import type { ScoreInput } from "@/lib/scoring/types";
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -11,7 +14,7 @@ export type ProcessedFinding = {
   title: string;
   description: string;
   filePath?: string;
-  lineNumber?: number;
+  lineStart?: number;
   recommendation?: string;
 };
 
@@ -19,6 +22,8 @@ export type ProcessAuditResult = {
   documents: Record<string, string>;
   findings: ProcessedFinding[];
   stack: string[];
+  slop: SlopResult;
+  scoreInput: ScoreInput;
   costUsd?: number;
   summary?: string;
   deployVerdict?: string;
@@ -37,49 +42,33 @@ function readIfExists(filePath: string) {
   return fs.readFileSync(filePath, "utf8");
 }
 
-function parseLeakFindings(metadataPath: string): ProcessedFinding[] {
-  if (!fs.existsSync(metadataPath)) return [];
-  const meta = JSON.parse(fs.readFileSync(metadataPath, "utf8")) as {
-    leak_findings?: Array<{
-      severity: Severity;
-      category: string;
-      description: string;
-      location?: string;
-      fix?: string;
-    }>;
-  };
+function walkSourceFiles(repoDir: string) {
+  const exts = new Set([".ts", ".tsx", ".js", ".jsx", ".py"]);
+  const skip = new Set(["node_modules", ".git", ".next", "dist", "build"]);
+  const out: Array<{ path: string; content: string; lines: number }> = [];
 
-  return (meta.leak_findings ?? []).map((f) => {
-    const lineMatch = f.location?.match(/:(\d+)$/);
-    const filePath = f.location?.replace(/:\d+$/, "").replace(/^commit [^/]+\s+\/\s+/, "");
-    return {
-      severity: f.severity,
-      category: f.category,
-      title: f.description.slice(0, 120),
-      description: f.description,
-      filePath: filePath || undefined,
-      lineNumber: lineMatch ? Number(lineMatch[1]) : undefined,
-      recommendation: f.fix,
-    };
-  });
-}
-
-function parseAuditMarkdownFindings(auditText: string): ProcessedFinding[] {
-  const out: ProcessedFinding[] = [];
-  for (const line of auditText.split("\n")) {
-    for (const severity of ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] as const) {
-      if (!line.includes(`[${severity}]`)) continue;
-      const title = line.replace(/^[\s\-*]+/, "").slice(0, 160);
-      out.push({
-        severity,
-        category: "audit",
-        title,
-        description: line.trim(),
-      });
-      break;
+  function walk(dir: string) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (skip.has(entry.name)) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (exts.has(path.extname(entry.name))) {
+        try {
+          const content = fs.readFileSync(full, "utf8");
+          out.push({
+            path: path.relative(repoDir, full),
+            content,
+            lines: content.split("\n").length,
+          });
+        } catch {
+          /* skip */
+        }
+      }
     }
   }
-  return out.slice(0, 50);
+
+  walk(repoDir);
+  return out;
 }
 
 function extractVerdict(auditText: string) {
@@ -165,9 +154,54 @@ export async function processAuditJob(input: {
       costUsd = meta.cost_usd;
     }
 
-    const leakFindings = parseLeakFindings(metadataPath);
-    const auditFindings = parseAuditMarkdownFindings(audit);
-    const merged = [...leakFindings, ...auditFindings].slice(0, 100);
+    const leakRaw = fs.existsSync(metadataPath)
+      ? (JSON.parse(fs.readFileSync(metadataPath, "utf8")) as { leak_findings?: unknown[] }).leak_findings ?? []
+      : [];
+    const leakFindings = parseLeakMetadata(leakRaw as Parameters<typeof parseLeakMetadata>[0]);
+    const auditFindings = parseAuditMarkdown(audit).map((f) => ({
+      severity: f.severity,
+      category: f.category,
+      title: f.title,
+      description: f.description,
+      filePath: f.filePath,
+      lineStart: f.lineStart,
+    }));
+    const merged = [...leakFindings, ...auditFindings].slice(0, 100).map((f) => ({
+      severity: f.severity,
+      category: f.category,
+      title: f.title,
+      description: f.description,
+      filePath: f.filePath,
+      lineStart: f.lineStart,
+      recommendation: "recommendation" in f ? (f as { recommendation?: string }).recommendation : undefined,
+    }));
+
+    const slopFiles = walkSourceFiles(repoDir).slice(0, 200);
+    const slop = scanAiSlop({ files: slopFiles });
+
+    const critical = merged.filter((f) => f.severity === "CRITICAL").length;
+    const high = merged.filter((f) => f.severity === "HIGH").length;
+    const medium = merged.filter((f) => f.severity === "MEDIUM").length;
+
+    const scoreInput: ScoreInput = {
+      criticalFindings: critical,
+      highFindings: high,
+      mediumFindings: medium,
+      giantFiles: slopFiles.filter((f) => f.lines > 400).length,
+      circularDeps: 0,
+      depCount: stack.length,
+      missingLockfile: !fs.existsSync(path.join(repoDir, "package-lock.json")),
+      hasReadme: fs.existsSync(path.join(repoDir, "README.md")),
+      hasTests: slopFiles.some((f) => f.path.includes("test") || f.path.includes("spec")),
+      testFileCount: slopFiles.filter((f) => /\.(test|spec)\./.test(f.path)).length,
+      sourceFileCount: slopFiles.length,
+      avgFileLines: slopFiles.length
+        ? Math.round(slopFiles.reduce((s, f) => s + f.lines, 0) / slopFiles.length)
+        : 0,
+      maxFileLines: slopFiles.reduce((m, f) => Math.max(m, f.lines), 0),
+      slopPercent: slop.overallPercent,
+      deployVerdict: extractVerdict(audit),
+    };
 
     return {
       documents: {
@@ -179,6 +213,8 @@ export async function processAuditJob(input: {
       },
       findings: merged,
       stack,
+      slop,
+      scoreInput,
       costUsd,
       summary: `Audit completed for ${input.repoFullName}`,
       deployVerdict: extractVerdict(audit),
