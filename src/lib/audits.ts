@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, lt } from "drizzle-orm";
 import { requireDb } from "@/lib/db";
 import {
   auditDocuments,
@@ -159,6 +159,17 @@ export async function claimNextQueuedAudit() {
     .returning();
 
   return updated ?? null;
+}
+
+const STUCK_AUDIT_MS = 35 * 60 * 1000;
+
+export async function recoverStuckAudits() {
+  const db = requireDb();
+  const cutoff = new Date(Date.now() - STUCK_AUDIT_MS);
+  await db
+    .update(auditRuns)
+    .set({ status: "queued", startedAt: null, error: "Requeued after worker timeout" })
+    .where(and(eq(auditRuns.status, "running"), lt(auditRuns.startedAt, cutoff)));
 }
 
 export async function runQueuedAudit(auditId: string) {
@@ -449,6 +460,7 @@ export async function runQueuedAudit(auditId: string) {
 }
 
 export async function processWorkerTick() {
+  await recoverStuckAudits();
   const claimed = await claimNextQueuedAudit();
   if (!claimed) {
     return { processed: false };

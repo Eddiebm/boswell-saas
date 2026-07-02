@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
+import { SafeFixPrButton } from "@/components/safe-fix-pr-button";
 import { getFixQueue, getPrimaryRepoId } from "@/lib/data";
 import { requireUserId } from "@/lib/session";
 
@@ -49,15 +50,7 @@ export default async function FixQueuePage() {
                 <span>Files: {(item.files ?? []).join(", ") || "—"}</span>
               </div>
               {item.canAutoPr ? (
-                <form action="/api/pr/create" method="post">
-                  <input type="hidden" name="itemId" value={item.id} />
-                  <button
-                    type="submit"
-                    className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-900"
-                  >
-                    Create safe-fix PR
-                  </button>
-                </form>
+                <SafeFixPrButton itemId={item.id} />
               ) : (
                 <p className="text-xs text-amber-300">Needs human review before Boswell can open a PR.</p>
               )}

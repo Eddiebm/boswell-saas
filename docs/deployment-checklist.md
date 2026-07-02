@@ -25,7 +25,9 @@ Or paste variables manually at [Vercel env settings](https://vercel.com/eddiebms
 | `AUTH_GITHUB_SECRET` | Yes |
 | `WORKER_SECRET` | Yes (random string) |
 
-Optional: `STRIPE_*`, `OPENROUTER_API_KEY` (not needed on Vercel — worker only).
+Optional on Vercel: `OPENROUTER_API_KEY` (enables Pro+ LLM answers in Engineering Brain), `STRIPE_*` (billing).
+
+On the **worker** (required for live audits): `OPENROUTER_API_KEY`, `BOSWELL_ENGINE_GIT_URL`.
 
 **GitHub OAuth app:** add callback  
 `https://YOUR_VERCEL_DOMAIN/api/auth/callback/github`
@@ -49,3 +51,5 @@ Worker runs `npm run worker` (polls audit queue, needs git + python3 on Render).
 - Sign in with GitHub works
 - `/dashboard/admin` shows env checks green
 - Run audit → status moves off `queued` within ~1 min (worker running)
+- Team plan: safe-fix PR opens a branch + proposal file (never pushes to main)
+- Business plan: executive dashboard unlocked

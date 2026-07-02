@@ -60,3 +60,26 @@ export function currentMonthKey() {
   const now = new Date();
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 }
+
+const PLAN_RANK: Record<PlanId, number> = {
+  free: 0,
+  pro: 1,
+  team: 2,
+  business: 3,
+};
+
+export function planMeetsMinimum(current: PlanId, required: PlanId): boolean {
+  return PLAN_RANK[current] >= PLAN_RANK[required];
+}
+
+export function canUsePrAutomation(plan: PlanId): boolean {
+  return planMeetsMinimum(plan, "team");
+}
+
+export function canUseLlmBrain(plan: PlanId): boolean {
+  return planMeetsMinimum(plan, "pro");
+}
+
+export function canUseExecutiveDashboard(plan: PlanId): boolean {
+  return planMeetsMinimum(plan, "business");
+}

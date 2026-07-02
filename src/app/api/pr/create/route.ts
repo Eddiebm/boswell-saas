@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isDemoMode } from "@/lib/demo/mode";
 import { requireDb } from "@/lib/db";
-import { fixQueueItems } from "@/lib/db/schema";
+import { fixQueueItems, pullRequests, repositories, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getRepositoryForUser } from "@/lib/repositories";
+import { createSafeFixPullRequest } from "@/lib/github/pr";
+import { canUsePrAutomation } from "@/lib/plans";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
+import type { PlanId } from "@/lib/plans";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -12,25 +16,38 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const rl = rateLimit(`pr:${clientIp(request)}`, 10, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+  }
+
   if (isDemoMode()) {
     return NextResponse.json({
       ok: true,
-      message: "Demo mode — PR creation simulated. Connect GitHub for real PRs.",
-      prUrl: "https://github.com/example/repo/pull/0",
+      message: "Demo mode — PR simulated.",
+      prUrl: "https://github.com/example/repo/pull/1",
     });
   }
 
-  const form = await request.formData();
-  const itemId = form.get("itemId");
-  if (!itemId || typeof itemId !== "string") {
+  const db = requireDb();
+  const [user] = await db.select().from(users).where(eq(users.id, session.user.id)).limit(1);
+  const plan = (user?.plan ?? "free") as PlanId;
+  if (!canUsePrAutomation(plan)) {
+    return NextResponse.json(
+      { error: "PR automation requires Team plan or higher." },
+      { status: 403 },
+    );
+  }
+
+  const body = (await request.json()) as { itemId?: string };
+  if (!body.itemId) {
     return NextResponse.json({ error: "itemId required" }, { status: 400 });
   }
 
-  const db = requireDb();
   const [item] = await db
     .select()
     .from(fixQueueItems)
-    .where(eq(fixQueueItems.id, itemId))
+    .where(eq(fixQueueItems.id, body.itemId))
     .limit(1);
 
   if (!item) {
@@ -49,11 +66,51 @@ export async function POST(request: Request) {
     );
   }
 
-  // Real PR flow: branch + commit + GitHub API — never push to main (pending GitHub App)
-  return NextResponse.json({
-    ok: true,
-    message: "PR workflow queued (stub). Wire GitHub API to create branch and open PR.",
-    itemId,
-    repositoryId: item.repositoryId,
-  });
+  const [fullRepo] = await db
+    .select()
+    .from(repositories)
+    .where(eq(repositories.id, repo.id))
+    .limit(1);
+
+  if (!fullRepo) {
+    return NextResponse.json({ error: "Repository not found" }, { status: 404 });
+  }
+
+  try {
+    const result = await createSafeFixPullRequest({
+      userId: session.user.id,
+      owner: fullRepo.owner,
+      repo: fullRepo.name,
+      defaultBranch: fullRepo.defaultBranch,
+      title: item.title,
+      body: item.whyItMatters,
+      suggestedFix: item.suggestedFix,
+      files: (item.files as string[]) ?? [],
+      fixQueueItemId: item.id,
+      rollbackNote: "Revert merge of the boswell/safe-fix branch or close the PR without merging.",
+    });
+
+    await db.insert(pullRequests).values({
+      repositoryId: fullRepo.id,
+      fixQueueItemId: item.id,
+      branch: result.branch,
+      title: `[Boswell] ${item.title}`,
+      body: item.suggestedFix,
+      riskLevel: "green",
+      rollbackNote: "Close PR or revert branch to undo.",
+      githubPrNumber: result.prNumber,
+      githubPrUrl: result.prUrl,
+      status: "open",
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: "Safe-fix PR opened on a branch (never pushed to main).",
+      prUrl: result.prUrl,
+      branch: result.branch,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "GitHub PR failed";
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 }

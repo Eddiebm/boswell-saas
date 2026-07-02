@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import Link from "next/link";
 import { Card } from "@/components/ui";
 import { ScoreGauge, DimensionBars } from "@/components/score-gauge";
 import {
@@ -10,9 +11,32 @@ import {
   getPrimaryRepoId,
 } from "@/lib/data";
 import { requireUserId } from "@/lib/session";
+import { requireDb } from "@/lib/db";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { canUseExecutiveDashboard, type PlanId } from "@/lib/plans";
+import { UpgradeButton } from "@/components/upgrade-button";
 
 export default async function ExecutivePage() {
   const userId = await requireUserId();
+  const db = requireDb();
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  const plan = (user?.plan ?? "free") as PlanId;
+
+  if (!canUseExecutiveDashboard(plan)) {
+    return (
+      <Card className="space-y-4">
+        <h1 className="text-2xl font-semibold">Executive dashboard</h1>
+        <p className="text-sm text-zinc-400">
+          Founder-friendly summaries and debt estimates are available on the Business plan.
+        </p>
+        <UpgradeButton plan="business" />
+        <p className="text-xs text-zinc-600">
+          Or use the <Link href="/dashboard" className="underline">Daily Briefing</Link> on any plan.
+        </p>
+      </Card>
+    );
+  }
   const briefing = await getDashboardBriefing(userId);
   const repos = await getRepositories(userId);
   const repoId = await getPrimaryRepoId(userId);

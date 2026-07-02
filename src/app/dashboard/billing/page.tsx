@@ -29,7 +29,7 @@ export default async function BillingPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {publicPlanSummary().map((item) => (
           <Card key={item.id} className={item.id === plan ? "border-white/30" : undefined}>
             <h2 className="text-xl font-medium">{item.name}</h2>
@@ -43,7 +43,12 @@ export default async function BillingPage() {
             </ul>
             <div className="mt-6">
               {item.id === "pro" && plan === "free" ? <UpgradeButton plan="pro" /> : null}
-              {item.id === "team" && plan !== "team" ? <UpgradeButton plan="team" /> : null}
+              {item.id === "team" && !["team", "business"].includes(plan) ? (
+                <UpgradeButton plan="team" />
+              ) : null}
+              {item.id === "business" && plan !== "business" ? (
+                <UpgradeButton plan="business" />
+              ) : null}
               {item.id === plan ? <p className="text-sm text-emerald-300">Current plan</p> : null}
             </div>
           </Card>

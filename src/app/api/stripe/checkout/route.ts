@@ -15,8 +15,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
   }
 
-  const body = (await request.json()) as { plan?: "pro" | "team" };
-  const plan = body.plan === "team" ? "team" : "pro";
+  const body = (await request.json()) as { plan?: "pro" | "team" | "business" };
+  const plan =
+    body.plan === "business" ? "business" : body.plan === "team" ? "team" : "pro";
   const priceId = getStripePriceId(plan);
   if (!priceId) {
     return NextResponse.json({ error: "Stripe price not configured" }, { status: 503 });

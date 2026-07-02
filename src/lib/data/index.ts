@@ -14,6 +14,7 @@ import {
   DEMO_REPO_ID,
 } from "@/lib/demo/data";
 import { answerBrainQuestion } from "@/lib/brain/answer";
+import { askOpenRouter, buildEvidenceContext } from "@/lib/brain/openrouter";
 import { requireDb } from "@/lib/db";
 import { eq, desc, and } from "drizzle-orm";
 import {
@@ -21,10 +22,13 @@ import {
   findings,
   fixQueueItems,
   memoryEvents,
+  repoAnswers,
+  repoQuestions,
   repoScores,
   repositories,
   reports,
   scoreSnapshots,
+  users,
 } from "@/lib/db/schema";
 import { getAuditForUser } from "@/lib/audits";
 import { generateAuditReport, reportToMarkdown } from "@/lib/reports/generate-report";
@@ -33,6 +37,7 @@ import type { RepoScoreResult } from "@/lib/scoring/types";
 import { emptySlopResult, type SlopResult } from "@/lib/slop/engine";
 import type { AutoFixLevel } from "@/lib/automation/safe-fix-policy";
 import type { FindingClassification } from "@/lib/classification/classify";
+import { canUseExecutiveDashboard, canUseLlmBrain, type PlanId } from "@/lib/plans";
 
 export async function getPrimaryRepoId(userId: string): Promise<string | null> {
   const repos = await getRepositories(userId);
@@ -380,6 +385,10 @@ export async function askBrain(userId: string, question: string, repoId?: string
   const fixQueue = await getFixQueue(targetRepoId);
   const briefing = await getDashboardBriefing(userId);
 
+  const db = requireDb();
+  const [userRow] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  const userPlan = (userRow?.plan ?? "free") as PlanId;
+
   const recurring = allFindings.filter((f) => f.status === "recurring").map((f) => f.title);
   const fixed = allFindings.filter((f) => f.status === "fixed").map((f) => f.title);
   const ignored = allFindings.filter((f) => f.status === "ignored").map((f) => f.title);
@@ -387,7 +396,7 @@ export async function askBrain(userId: string, question: string, repoId?: string
     ...new Set(allFindings.filter((f) => f.filePath).map((f) => f.filePath!)),
   ].slice(0, 5);
 
-  return answerBrainQuestion(question, {
+  const templateResult = answerBrainQuestion(question, {
     repoName: repo.fullName,
     score,
     slop,
@@ -403,6 +412,42 @@ export async function askBrain(userId: string, question: string, repoId?: string
     authPath: riskyFiles.find((f) => f.includes("middleware")) ?? "src/middleware.ts",
     billingNote: "Check /dashboard/billing for Stripe configuration.",
   });
+
+  const evidenceContext = buildEvidenceContext({
+    repoName: repo.fullName,
+    score: score.overall,
+    slopPercent: slop.overallPercent,
+    briefingSummary: briefing?.executiveSummary ?? "",
+    topFindings: allFindings.slice(0, 8).map((f) => `${f.title} (${f.filePath ?? "no file"})`),
+    memoryEvents: memoryEvents.map((m) => m.summary),
+    fixQueue: fixQueue.slice(0, 5).map((q) => q.title),
+    riskyFiles,
+  });
+
+  const llm = canUseLlmBrain(userPlan) ? await askOpenRouter(question, evidenceContext) : null;
+  const result = llm
+    ? {
+        answer: llm.answer,
+        evidence: [...templateResult.evidence, `Model: ${llm.model}`],
+      }
+    : templateResult;
+
+  const [qRow] = await db
+    .insert(repoQuestions)
+    .values({
+      repositoryId: targetRepoId,
+      userId,
+      question,
+    })
+    .returning();
+
+  await db.insert(repoAnswers).values({
+    questionId: qRow.id,
+    answer: result.answer,
+    evidence: result.evidence,
+  });
+
+  return result;
 }
 
 export async function getWorkerHealth() {

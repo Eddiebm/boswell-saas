@@ -27,7 +27,8 @@ export async function POST(request: Request) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
     const userId = session.metadata?.userId;
-    const plan = (session.metadata?.plan as "pro" | "team" | undefined) ?? "pro";
+    const plan =
+      (session.metadata?.plan as "pro" | "team" | "business" | undefined) ?? "pro";
     if (userId) {
       await db.update(users).set({ plan }).where(eq(users.id, userId));
     }

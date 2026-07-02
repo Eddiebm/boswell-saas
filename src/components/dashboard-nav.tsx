@@ -2,9 +2,11 @@ import Link from "next/link";
 import { signOut } from "@/lib/auth";
 import { isDemoMode } from "@/lib/demo/mode";
 import { Button } from "@/components/ui";
+import { NavLink } from "@/components/nav-link";
 
 const links = [
   { href: "/dashboard", label: "Daily Briefing" },
+  { href: "/dashboard/onboarding", label: "Setup" },
   { href: "/dashboard/executive", label: "Executive" },
   { href: "/dashboard/repos", label: "Repositories" },
   { href: "/dashboard/audits", label: "Audits" },
@@ -26,13 +28,7 @@ export function DashboardNav() {
           </Link>
           <nav className="flex flex-wrap gap-x-4 gap-y-2">
             {links.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="text-sm text-zinc-400 transition hover:text-white"
-              >
-                {link.label}
-              </Link>
+              <NavLink key={link.href} href={link.href} label={link.label} />
             ))}
           </nav>
         </div>

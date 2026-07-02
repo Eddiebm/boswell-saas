@@ -1,53 +1,48 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { Button as ShadButton } from "@/components/ui/button";
+import {
+  Badge as ShadBadge,
+  ClassificationBadge,
+  AutoFixBadge,
+} from "@/components/ui/badge";
+import { Card as ShadCard } from "@/components/ui/card";
 
-export function Button({
-  className,
-  href,
-  children,
-  variant = "primary",
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   href?: string;
-  variant?: "primary" | "secondary" | "ghost";
-}) {
-  const styles = cn(
-    "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition",
-    variant === "primary" && "bg-white text-black hover:bg-zinc-200",
-    variant === "secondary" && "border border-zinc-700 text-zinc-100 hover:bg-zinc-900",
-    variant === "ghost" && "text-zinc-300 hover:text-white hover:bg-zinc-900",
-    className,
-  );
+  variant?: "primary" | "secondary" | "ghost" | "destructive";
+};
 
+const variantMap = {
+  primary: "default",
+  secondary: "secondary",
+  ghost: "ghost",
+  destructive: "destructive",
+} as const;
+
+export function Button({ className, href, children, variant = "primary", ...props }: ButtonProps) {
+  const mapped = variantMap[variant];
   if (href) {
     return (
-      <Link href={href} className={styles}>
-        {children}
-      </Link>
+      <ShadButton asChild variant={mapped} className={className}>
+        <Link href={href}>{children}</Link>
+      </ShadButton>
     );
   }
-
   return (
-    <button className={styles} {...props}>
+    <ShadButton variant={mapped} className={className} {...props}>
       {children}
-    </button>
+    </ShadButton>
   );
 }
 
-export function Card({
-  className,
-  children,
-}: {
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className={cn("rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6", className)}>
-      {children}
-    </div>
-  );
+export function Card({ className, children }: { className?: string; children: ReactNode }) {
+  return <ShadCard className={className}>{children}</ShadCard>;
 }
+
+export { Input } from "@/components/ui/input";
+export { Skeleton } from "@/components/ui/skeleton";
+export { ClassificationBadge, AutoFixBadge };
 
 export function Badge({
   children,
@@ -56,35 +51,15 @@ export function Badge({
   children: ReactNode;
   tone?: "neutral" | "good" | "warn" | "bad" | "evil";
 }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex rounded-full px-2.5 py-1 text-xs font-medium",
-        tone === "neutral" && "bg-zinc-800 text-zinc-300",
-        tone === "good" && "bg-emerald-500/10 text-emerald-300",
-        tone === "warn" && "bg-amber-500/10 text-amber-300",
-        tone === "bad" && "bg-red-500/10 text-red-300",
-        tone === "evil" && "bg-purple-500/15 text-purple-200 ring-1 ring-purple-500/30",
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
-export function ClassificationBadge({ classification }: { classification: string }) {
-  const tone =
-    classification === "good"
+  const variant =
+    tone === "good"
       ? "good"
-      : classification === "bad"
+      : tone === "warn"
         ? "warn"
-        : classification === "evil"
+        : tone === "evil"
           ? "evil"
-          : "bad";
-  return <Badge tone={tone}>{classification}</Badge>;
-}
-
-export function AutoFixBadge({ level }: { level: string }) {
-  const tone = level === "green" ? "good" : level === "yellow" ? "warn" : "bad";
-  return <Badge tone={tone}>{level.toUpperCase()}</Badge>;
+          : tone === "bad"
+            ? "bad"
+            : "default";
+  return <ShadBadge variant={variant}>{children}</ShadBadge>;
 }

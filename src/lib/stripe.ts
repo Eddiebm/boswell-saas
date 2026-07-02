@@ -7,16 +7,16 @@ export const stripe =
     : null;
 
 export function getStripePriceId(plan: Exclude<PlanId, "free">) {
-  if (plan === "pro") {
-    return process.env.STRIPE_PRICE_PRO ?? "";
-  }
-  return process.env.STRIPE_PRICE_TEAM ?? "";
+  if (plan === "pro") return process.env.STRIPE_PRICE_PRO ?? "";
+  if (plan === "team") return process.env.STRIPE_PRICE_TEAM ?? "";
+  return process.env.STRIPE_PRICE_BUSINESS ?? "";
 }
 
 export function planFromStripePrice(priceId: string | null | undefined): PlanId {
   if (!priceId) return "free";
   if (priceId === process.env.STRIPE_PRICE_PRO) return "pro";
   if (priceId === process.env.STRIPE_PRICE_TEAM) return "team";
+  if (priceId === process.env.STRIPE_PRICE_BUSINESS) return "business";
   return "free";
 }
 

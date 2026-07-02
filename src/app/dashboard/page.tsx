@@ -26,7 +26,14 @@ export default async function DashboardPage() {
               : "Sync a GitHub repository, then run your first audit."}
           </p>
         </Card>
-        {!isDemoMode() && !repos.length ? <SyncReposButton /> : null}
+        {!isDemoMode() && !repos.length ? (
+          <div className="flex flex-wrap gap-3">
+            <SyncReposButton />
+            <Button href="/dashboard/onboarding" variant="secondary">
+              Setup guide
+            </Button>
+          </div>
+        ) : null}
       </div>
     );
   }

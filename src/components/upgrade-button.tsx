@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui";
 
-export function UpgradeButton({ plan }: { plan: "pro" | "team" }) {
+export function UpgradeButton({ plan }: { plan: "pro" | "team" | "business" }) {
   const [loading, setLoading] = useState(false);
 
   async function checkout() {
