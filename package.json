@@ -50,6 +50,7 @@
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
     "tsx": "^4.22.5",
+    "tweetsodium": "^0.0.4",
     "typescript": "^5"
   }
 }
