@@ -56,8 +56,8 @@ export function getEnvChecks(): EnvCheck[] {
     },
     {
       name: "Worker process",
-      status: "manual",
-      detail: "Run npm run worker locally or deploy render.yaml — never on Vercel",
+      status: "ok",
+      detail: "GitHub Actions runs audit-worker.yml every 2 minutes (cloud)",
     },
   ];
 }

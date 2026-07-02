@@ -1,0 +1,43 @@
+name: Boswell audit worker
+
+on:
+  schedule:
+    - cron: "*/2 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: boswell-audit-worker
+  cancel-in-progress: false
+
+jobs:
+  process-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Boswell engine
+        run: |
+          pip install "boswell @ git+https://github.com/Eddiebm/boswell.git"
+          boswell --version || true
+
+      - name: Process next queued audit
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          BOSWELL_ENGINE_GIT_URL: ${{ secrets.BOSWELL_ENGINE_GIT_URL }}
+          NODE_ENV: production
+        run: npx tsx scripts/worker-once.ts

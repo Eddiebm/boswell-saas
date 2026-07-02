@@ -74,14 +74,13 @@ curl -sf -L -o /dev/null -w "%{http_code}" \
   "${PROD_URL}/api/setup/owner" || echo "Bootstrap will work after deploy completes"
 
 echo ""
-echo "=== 5. Start local worker (processes production audit queue) ==="
-if ! pgrep -f "tsx scripts/worker.ts" >/dev/null 2>&1; then
-  (cd "$(dirname "$0")/.." && set -a && source .env.local && set +a && npm run worker >> /tmp/boswell-worker.log 2>&1 &)
-  echo "Worker started (log: /tmp/boswell-worker.log)"
-else
-  echo "Worker already running"
-fi
+echo "=== 5. Deploy cloud worker (GitHub Actions) ==="
+chmod +x scripts/deploy-cloud-worker.sh
+./scripts/deploy-cloud-worker.sh
 
 echo ""
-echo "Done. Open: ${PROD_URL}/api/setup/owner with header x-worker-secret to sign in,"
-echo "or visit ${PROD_URL}/login after OAuth is configured."
+echo "=== 6. Stop local worker if running ==="
+pkill -f "tsx scripts/worker.ts" 2>/dev/null && echo "Stopped local worker" || echo "No local worker running"
+
+echo ""
+echo "Done. Sign in at ${PROD_URL}/login → Continue as owner"

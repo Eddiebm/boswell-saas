@@ -34,22 +34,23 @@ On the **worker** (required for live audits): `OPENROUTER_API_KEY`, `BOSWELL_ENG
 
 Then run `npm run db:push` locally against the same Neon DB.
 
-## Render (audit worker)
+## Audit worker (cloud)
 
-1. [dashboard.render.com](https://dashboard.render.com) → **New** → **Blueprint**
-2. Connect `github.com/Eddiebm/boswell-saas`
-3. Set env vars on the worker service:
-   - `DATABASE_URL`
-   - `OPENROUTER_API_KEY`
-   - `WORKER_SECRET` (same as Vercel)
+Audits run on **GitHub Actions** — not on your laptop or Vercel.
 
-Worker runs `npm run worker` (polls audit queue, needs git + python3 on Render).
+```bash
+npm run deploy:worker
+```
+
+This sets `DATABASE_URL`, `OPENROUTER_API_KEY`, etc. as GitHub secrets and triggers `.github/workflows/audit-worker.yml` (every 2 minutes).
+
+Optional: Render worker via Blueprint (`render.yaml`) if you prefer a always-on process instead of cron.
 
 ## Verify
 
 - Web loads at Vercel URL
-- Sign in with GitHub works
+- Sign in at `/login` → **Continue as owner** (or GitHub OAuth when configured)
 - `/dashboard/admin` shows env checks green
-- Run audit → status moves off `queued` within ~1 min (worker running)
+- Run audit → status moves off `queued` within ~2 min (GitHub Actions worker)
 - Team plan: safe-fix PR opens a branch + proposal file (never pushes to main)
 - Business plan: executive dashboard unlocked
