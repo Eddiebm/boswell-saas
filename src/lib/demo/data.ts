@@ -1,6 +1,9 @@
 import { buildDailyBriefing, type DailyBriefing } from "@/lib/briefing/build-briefing";
 import { buildCoaching, type CoachingSections } from "@/lib/coaching/build-coaching";
+import { enrichFinding } from "@/lib/enrich/finding";
+import { groupByClassification } from "@/lib/classification/classify";
 import { prioritizeFixQueue } from "@/lib/fix-queue/prioritize";
+import { generateAuditReport, reportToMarkdown } from "@/lib/reports/generate-report";
 import { computeRepoScore } from "@/lib/scoring/engine";
 import type { RepoScoreResult } from "@/lib/scoring/types";
 import { scanAiSlop, type SlopResult } from "@/lib/slop/engine";
@@ -58,7 +61,7 @@ export const demoScore: RepoScoreResult = computeRepoScore({
 
 export const demoPreviousScore = 712;
 
-export const demoFindings = [
+const rawFindings = [
   {
     id: "f1",
     repositoryId: DEMO_REPO_ID,
@@ -113,17 +116,51 @@ export const demoFindings = [
     autoFixable: false,
     isPositive: true,
   },
-].map((f) => ({
-  ...f,
-  coaching: buildCoaching({
+  {
+    id: "f5",
+    repositoryId: DEMO_REPO_ID,
+    auditRunId: DEMO_AUDIT_ID,
+    title: "Unused helper file with placeholder logic",
+    description: "[LOW] `src/lib/legacy-helper.ts` — dead code candidate, generic TODO comments.",
+    severity: "LOW" as const,
+    category: "documentation",
+    filePath: "src/lib/legacy-helper.ts",
+    status: "open" as const,
+    confidence: 0.82,
+    autoFixable: true,
+  },
+];
+
+export const demoFindings = rawFindings.map((f) => {
+  const enriched = enrichFinding({
     title: f.title,
     description: f.description,
     severity: f.severity,
     category: f.category,
-    filePath: f.filePath,
     isPositive: "isPositive" in f ? f.isPositive : false,
-  }),
-}));
+  });
+  return {
+    ...f,
+    ...enriched,
+    evidence: f.filePath ? [`${f.filePath}:${f.lineStart ?? 1}`] : [],
+    recommendation: enriched.classification === "good" ? "Keep this pattern." : "Review and remediate.",
+    fixSteps: enriched.canOpenPr
+      ? "Boswell can open a safe PR after you confirm."
+      : "Manual review required before any automated change.",
+    coaching: buildCoaching({
+      title: f.title,
+      description: f.description,
+      severity: f.severity,
+      category: f.category,
+      filePath: f.filePath,
+      isPositive: "isPositive" in f ? f.isPositive : false,
+    }),
+  };
+});
+
+const classifiedGroups = groupByClassification(
+  demoFindings.map((f) => ({ ...f, classification: f.classification })),
+);
 
 export const demoFixQueue = prioritizeFixQueue(
   demoFindings
@@ -137,7 +174,7 @@ export const demoFixQueue = prioritizeFixQueue(
       files: f.filePath ? [f.filePath] : [],
       whyItMatters: f.coaching.whyBad ?? f.coaching.whatHappened,
       suggestedFix: f.coaching.howToFix,
-      canAutoPr: f.coaching.autoFixStatus === "safe",
+      canAutoPr: f.autoFixLevel === "green",
       category: f.category,
     })),
 );
@@ -155,11 +192,39 @@ export const demoBriefing: DailyBriefing = buildDailyBriefing({
       href: `/dashboard/audits/${DEMO_AUDIT_ID}#${f.id}`,
     })),
   fixedFindings: ["Removed tracked .env.example secret placeholder"],
+  ignoredFindings: ["Legacy console.log in API route (accepted risk)"],
   recurringFindings: ["No automated tests detected"],
+  classifications: {
+    good: classifiedGroups.good.map((f) => f.title),
+    bad: classifiedGroups.bad.map((f) => f.title),
+    dangerous: classifiedGroups.dangerous.map((f) => f.title),
+    evil: classifiedGroups.evil.map((f) => f.title),
+  },
+  safePrTitles: demoFindings.filter((f) => f.autoFixLevel === "green").map((f) => f.title),
   slop: demoSlop,
   deployVerdict: "Needs fixes before production",
   commitSummary: ["3 commits since last audit", "API route touched", "Dependencies updated"],
 });
+
+export const demoStructuredReport = generateAuditReport({
+  repoName: "Eddiebm/audiolens-app",
+  findings: demoFindings.map((f) => ({
+    id: f.id,
+    title: f.title,
+    description: f.description,
+    severity: f.severity,
+    classification: f.classification,
+    filePath: f.filePath,
+    evidence: f.evidence,
+    autoFixLevel: f.autoFixLevel,
+  })),
+  score: demoScore,
+  slop: demoSlop,
+  briefing: demoBriefing,
+  fixQueueCount: demoFixQueue.length,
+});
+
+export const demoAuditMarkdown = reportToMarkdown(demoStructuredReport);
 
 export const demoMemory = [
   {
@@ -196,7 +261,13 @@ export const demoScoreHistory = [
   { snapshotAt: "2026-06-15", overall: 680, security: 720, architecture: 650, aiSlop: 600 },
   { snapshotAt: "2026-06-22", overall: 712, security: 740, architecture: 670, aiSlop: 580 },
   { snapshotAt: "2026-06-29", overall: 745, security: 780, architecture: 710, aiSlop: 550 },
-  { snapshotAt: "2026-07-02", overall: demoScore.overall, security: demoScore.dimensions.security, architecture: demoScore.dimensions.architecture, aiSlop: demoScore.dimensions.aiSlop },
+  {
+    snapshotAt: "2026-07-02",
+    overall: demoScore.overall,
+    security: demoScore.dimensions.security,
+    architecture: demoScore.dimensions.architecture,
+    aiSlop: demoScore.dimensions.aiSlop,
+  },
 ];
 
 export const demoRepos = [
@@ -218,43 +289,5 @@ export const demoRepos = [
   },
 ];
 
-export const demoAuditMarkdown = `## Deploy Verdict
-**Verdict:** Needs fixes before production — address HIGH items first.
-
-## Findings
-- **[HIGH]** \`src/app/api/process-audio/route.ts:18\` — API key handling needs hardening
-- **[MEDIUM]** \`src/components/Dashboard.tsx:1\` — oversized component
-- **[MEDIUM]** No test files detected
-- **[INFO]** \`src/middleware.ts\` — auth routing is well centralized
-`;
-
-export function answerBrainQuestion(question: string): string {
-  const q = question.toLowerCase();
-  if (q.includes("authentication") || q.includes("auth")) {
-    return "Authentication is handled in `src/middleware.ts`, which protects `/dashboard` routes before requests reach page handlers.";
-  }
-  if (q.includes("billing") || q.includes("stripe")) {
-    return "Billing is not fully implemented in audiolens-app. Boswell Cloud billing lives in the SaaS app under `/dashboard/billing`.";
-  }
-  if (q.includes("risky") || q.includes("risk")) {
-    return `This repo scores ${demoScore.overall}/1000. Top risks: missing tests, API key handling, and ${demoSlop.overallPercent}% AI slop indicators.`;
-  }
-  if (q.includes("review first") || q.includes("files")) {
-    return "Review first: `src/app/api/process-audio/route.ts`, `src/components/Dashboard.tsx`, and any file flagged in the AI Slop report.";
-  }
-  if (q.includes("changed") || q.includes("last audit")) {
-    return demoBriefing.whatChanged.join("; ");
-  }
-  if (q.includes("debt")) {
-    return "Biggest technical debt: no automated tests, one oversized component, and repeated generic helper patterns (AI slop).";
-  }
-  if (q.includes("fix today") || q.includes("today")) {
-    return demoBriefing.suggestedActions.map((a) => a.title).join("; ") || "No urgent actions.";
-  }
-  if (q.includes("ai") || q.includes("slop")) {
-    return `AI Slop Score is ${demoSlop.overallPercent}%. Top cause: ${demoSlop.topCauses[0]?.label ?? "none"}.`;
-  }
-  return "I can answer questions about auth, billing, risks, files to review, changes since last audit, tech debt, and AI slop. Try rephrasing with one of those topics.";
-}
-
+export { answerBrainQuestion } from "@/lib/brain/answer";
 export type { CoachingSections };

@@ -35,7 +35,16 @@ export const findingStatusEnum = pgEnum("finding_status", [
   "recurring",
 ]);
 
-export const planEnum = pgEnum("plan", ["free", "pro", "team"]);
+export const planEnum = pgEnum("plan", ["free", "pro", "team", "business"]);
+
+export const findingClassificationEnum = pgEnum("finding_classification", [
+  "good",
+  "bad",
+  "dangerous",
+  "evil",
+]);
+
+export const autoFixLevelEnum = pgEnum("auto_fix_level", ["green", "yellow", "red"]);
 
 export const workerJobStatusEnum = pgEnum("worker_job_status", [
   "queued",
@@ -183,6 +192,10 @@ export const findings = pgTable("findings", {
   lineEnd: integer("line_end"),
   evidence: jsonb("evidence").$type<string[]>().default([]),
   recommendation: text("recommendation"),
+  simpleExplanation: text("simple_explanation"),
+  classification: findingClassificationEnum("classification").default("bad"),
+  fixSteps: text("fix_steps"),
+  autoFixLevel: autoFixLevelEnum("auto_fix_level").default("red"),
   coaching: jsonb("coaching"),
   confidence: real("confidence").default(0.8),
   status: findingStatusEnum("status").default("open").notNull(),
@@ -351,8 +364,67 @@ export const workerJobs = pgTable("worker_jobs", {
   payload: jsonb("payload").notNull(),
   status: workerJobStatusEnum("status").default("queued").notNull(),
   attempts: integer("attempts").default(0).notNull(),
+  maxAttempts: integer("max_attempts").default(3).notNull(),
+  progress: integer("progress").default(0),
   error: text("error"),
   startedAt: timestamp("started_at", { mode: "date" }),
   finishedAt: timestamp("finished_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const repoQuestions = pgTable("repo_questions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  repositoryId: uuid("repository_id")
+    .notNull()
+    .references(() => repositories.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  question: text("question").notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const repoAnswers = pgTable("repo_answers", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  questionId: uuid("question_id")
+    .notNull()
+    .references(() => repoQuestions.id, { onDelete: "cascade" }),
+  answer: text("answer").notNull(),
+  evidence: jsonb("evidence").$type<string[]>().default([]),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const architectureDecisions = pgTable("architecture_decisions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  repositoryId: uuid("repository_id")
+    .notNull()
+    .references(() => repositories.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  summary: text("summary").notNull(),
+  rationale: text("rationale"),
+  decidedAt: timestamp("decided_at", { mode: "date" }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const dependencyEvents = pgTable("dependency_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  repositoryId: uuid("repository_id")
+    .notNull()
+    .references(() => repositories.id, { onDelete: "cascade" }),
+  packageName: text("package_name").notNull(),
+  fromVersion: text("from_version"),
+  toVersion: text("to_version"),
+  eventType: text("event_type").notNull(),
+  occurredAt: timestamp("occurred_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const safeFixPolicies = pgTable("safe_fix_policies", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  repositoryId: uuid("repository_id")
+    .notNull()
+    .references(() => repositories.id, { onDelete: "cascade" }),
+  category: text("category").notNull(),
+  level: autoFixLevelEnum("level").notNull(),
+  description: text("description").notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });

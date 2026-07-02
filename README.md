@@ -11,7 +11,11 @@ Boswell watches your repositories, understands what changed, remembers engineeri
 | AI Slop Score | **Deterministic scanner** |
 | Engineering Memory | **Demo + DB-backed events** |
 | Fix Queue prioritization | **Implemented** |
-| Engineering Brain Q&A | **Demo templates** (LLM optional later) |
+| Good / bad / dangerous / evil classification | **Implemented** |
+| Safe automation (green/yellow/red) | **Implemented** |
+| Structured audit reports (JSON + markdown) | **Implemented** |
+| Evidence-backed Brain Q&A | **Demo + API** |
+| Business billing tier | **Placeholder** |
 | Coaching sections per finding | **Implemented** |
 | PR mode (no push to main) | **API stub + policy** |
 | GitHub OAuth + audits | **Requires env** |
@@ -44,9 +48,11 @@ npm run worker   # separate terminal — processes audit jobs
 npm test
 ```
 
-Covers: scoring engine, audit markdown parser, fix-queue prioritization, AI slop scanner.
+Covers: scoring, audit parser, fix-queue, AI slop, classification, safe-fix policy, report generation, memory queries.
 
-## Architecture
+## Documentation
+
+See `docs/` for architecture, deployment, scoring methodology, and safety policy.
 
 - **Web:** Next.js 16 App Router on Vercel
 - **DB:** Neon Postgres + Drizzle ORM

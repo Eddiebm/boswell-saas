@@ -29,8 +29,23 @@ export const PLANS = {
     features: [
       "200 audits / month",
       "100 connected repos",
-      "Shared org dashboard",
-      "Export + API access",
+      "Scheduled audits",
+      "PR automation",
+      "Engineering memory + Q&A",
+    ],
+  },
+  business: {
+    id: "business",
+    name: "Business",
+    priceMonthly: 299,
+    auditsPerMonth: 1000,
+    maxRepos: 500,
+    features: [
+      "Unlimited-scale audits",
+      "Executive dashboard",
+      "Advanced reports",
+      "Priority support",
+      "Custom safe-fix policies",
     ],
   },
 } as const;

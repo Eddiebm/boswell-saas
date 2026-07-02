@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Badge, Button, Card } from "@/components/ui";
 import { ScoreGauge } from "@/components/score-gauge";
 import { RunAuditButton } from "@/components/run-audit-button";
-import { getDashboardBriefing, getRepositories, DEMO_REPO_ID } from "@/lib/data";
+import { getDashboardBriefing, getRepositories } from "@/lib/data";
 import { isDemoMode } from "@/lib/demo/mode";
 import { demoScore } from "@/lib/demo/data";
 
@@ -29,6 +29,7 @@ export default async function DashboardPage() {
           <p className="text-sm uppercase tracking-widest text-zinc-500">Daily CTO Briefing</p>
           <h1 className="mt-2 text-3xl font-semibold">{briefing.greeting}</h1>
           <p className="mt-3 max-w-2xl text-zinc-400">{briefing.executiveSummary}</p>
+          <p className="mt-2 max-w-2xl text-sm leading-7 text-zinc-500">{briefing.plainEnglishSummary}</p>
         </div>
         <div className="flex gap-2">
           {primaryRepo ? (
@@ -45,8 +46,14 @@ export default async function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <ScoreGauge score={demoScore.overall} label="Health score" />
         <Card>
-          <p className="text-sm text-zinc-400">Release readiness</p>
-          <p className="mt-2 text-lg font-medium">{briefing.releaseReadiness}</p>
+          <p className="text-sm text-zinc-400">Top priority today</p>
+          <p className="mt-2 text-sm font-medium leading-6">
+            {briefing.topPriorityAction ?? "No urgent blockers"}
+          </p>
+        </Card>
+        <Card>
+          <p className="text-sm text-zinc-400">Tech debt estimate</p>
+          <p className="mt-2 text-3xl font-semibold">~{Math.round(briefing.debtHoursEstimate)}h</p>
         </Card>
         <Card>
           <p className="text-sm text-zinc-400">Health delta</p>
@@ -58,21 +65,38 @@ export default async function DashboardPage() {
                 : briefing.healthDelta}
           </p>
         </Card>
-        <Card>
-          <p className="text-sm text-zinc-400">Repos watched</p>
-          <p className="mt-2 text-3xl font-semibold">{repos.length}</p>
-        </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <BriefingList title="What changed" items={briefing.whatChanged} />
         <BriefingList title="New risks" items={briefing.newRisks} tone="bad" />
-        <BriefingList title="Regressions" items={briefing.regressions} tone="warn" />
-        <BriefingList title="Improvements" items={briefing.improvements} tone="good" />
+        <BriefingList title="Fixed risks" items={briefing.fixedRisks} tone="good" />
+        <BriefingList title="Ignored risks" items={briefing.ignoredRisks} tone="warn" />
       </div>
 
+      <section className="grid gap-4 lg:grid-cols-4">
+        <ClassificationCard title="Good" items={briefing.classifications.good} tone="good" />
+        <ClassificationCard title="Bad" items={briefing.classifications.bad} tone="warn" />
+        <ClassificationCard title="Dangerous" items={briefing.classifications.dangerous} tone="bad" />
+        <ClassificationCard title="Evil" items={briefing.classifications.evil} tone="evil" />
+      </section>
+
+      {briefing.safePrsReady.length ? (
+        <Card>
+          <h2 className="font-medium">Safe PRs ready for review</h2>
+          <ul className="mt-3 space-y-2 text-sm text-zinc-400">
+            {briefing.safePrsReady.map((pr) => (
+              <li key={pr} className="flex gap-2">
+                <Badge tone="good">GREEN</Badge>
+                <span>{pr}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
       <section className="space-y-4">
-        <h2 className="text-xl font-medium">Suggested actions for today</h2>
+        <h2 className="text-xl font-medium">Ignore most findings. Fix these first.</h2>
         <div className="space-y-3">
           {briefing.suggestedActions.map((action) => (
             <Card key={action.id} className="flex items-center justify-between gap-4 py-4">
@@ -92,6 +116,11 @@ export default async function DashboardPage() {
           ))}
         </div>
       </section>
+
+      <Card>
+        <p className="text-sm text-zinc-400">Release readiness</p>
+        <p className="mt-2 font-medium">{briefing.releaseReadiness}</p>
+      </Card>
 
       {isDemoMode() ? (
         <Card className="border-amber-500/20 bg-amber-500/5 text-sm text-amber-200">
@@ -125,6 +154,28 @@ function BriefingList({
         ) : (
           <li>Nothing notable.</li>
         )}
+      </ul>
+    </Card>
+  );
+}
+
+function ClassificationCard({
+  title,
+  items,
+  tone,
+}: {
+  title: string;
+  items: string[];
+  tone: "good" | "warn" | "bad" | "evil";
+}) {
+  return (
+    <Card>
+      <div className="flex items-center gap-2">
+        <Badge tone={tone}>{title}</Badge>
+        <span className="text-xs text-zinc-500">{items.length}</span>
+      </div>
+      <ul className="mt-3 space-y-1 text-sm text-zinc-400">
+        {items.length ? items.map((item) => <li key={item}>{item}</li>) : <li>None</li>}
       </ul>
     </Card>
   );

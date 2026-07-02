@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { Badge, Card } from "@/components/ui";
+import { Badge, Card, AutoFixBadge } from "@/components/ui";
 import { getFixQueue, DEMO_REPO_ID } from "@/lib/data";
 
 export default async function FixQueuePage() {
@@ -10,9 +10,9 @@ export default async function FixQueuePage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-xl font-semibold">Autonomous fix queue</h1>
+        <h1 className="text-3xl font-semibold">Fix queue</h1>
         <p className="mt-2 text-zinc-400">
-          Prioritized engineering work sorted by business and engineering value. Boswell never pushes to main — only opens PRs for safe fixes.
+          Ignore most findings. Fix these first. Boswell never pushes to main — only opens PRs for green-tier fixes.
         </p>
       </div>
 

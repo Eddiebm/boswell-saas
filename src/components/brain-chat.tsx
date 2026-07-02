@@ -3,9 +3,14 @@
 import { useState } from "react";
 import { Button } from "@/components/ui";
 
+type BrainResponse = {
+  answer: string;
+  evidence: string[];
+};
+
 export function BrainChat() {
   const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState<string | null>(null);
+  const [response, setResponse] = useState<BrainResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
   const presets = [
@@ -16,6 +21,8 @@ export function BrainChat() {
     "What is the biggest technical debt?",
     "What would you fix today?",
     "Which files look AI-generated?",
+    "What is safe to auto-fix?",
+    "What is dangerous?",
   ];
 
   async function ask(q: string) {
@@ -26,8 +33,8 @@ export function BrainChat() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question: q }),
     });
-    const data = await res.json();
-    setAnswer(data.answer);
+    const data = (await res.json()) as BrainResponse;
+    setResponse(data);
     setLoading(false);
   }
 
@@ -62,9 +69,19 @@ export function BrainChat() {
           {loading ? "Thinking…" : "Ask"}
         </Button>
       </form>
-      {answer ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-sm leading-7 text-zinc-300">
-          {answer}
+      {response ? (
+        <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+          <p className="text-sm leading-7 text-zinc-300">{response.answer}</p>
+          {response.evidence?.length ? (
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">Evidence</p>
+              <ul className="mt-2 space-y-1 text-xs text-zinc-400">
+                {response.evidence.map((e) => (
+                  <li key={e}>• {e}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

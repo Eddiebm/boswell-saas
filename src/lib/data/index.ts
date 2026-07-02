@@ -9,10 +9,11 @@ import {
   demoScore,
   demoScoreHistory,
   demoSlop,
+  demoStructuredReport,
   DEMO_AUDIT_ID,
   DEMO_REPO_ID,
-  answerBrainQuestion,
 } from "@/lib/demo/data";
+import { answerBrainQuestion } from "@/lib/brain/answer";
 import { requireDb } from "@/lib/db";
 import { eq, desc } from "drizzle-orm";
 import {
@@ -139,6 +140,7 @@ export async function getAuditReport(auditId: string) {
     return {
       id: auditId,
       markdown: demoAuditMarkdown,
+      structured: demoStructuredReport,
       findings: demoFindings,
       briefing: demoBriefing,
       score: demoScore,
@@ -150,7 +152,32 @@ export async function getAuditReport(auditId: string) {
 }
 
 export async function askBrain(_userId: string, question: string) {
-  return answerBrainQuestion(question);
+  if (isDemoMode()) {
+    const result = answerBrainQuestion(question, {
+      repoName: "Eddiebm/audiolens-app",
+      score: demoScore,
+      slop: demoSlop,
+      memoryEvents: demoMemory,
+      scoreHistory: demoScoreHistory.map((s) => ({
+        snapshotAt: s.snapshotAt,
+        overall: s.overall,
+      })),
+      recurringFindings: ["No automated tests detected"],
+      fixedFindings: ["Removed tracked .env.example secret placeholder"],
+      ignoredFindings: ["Legacy console.log in API route"],
+      riskyFiles: ["src/app/api/process-audio/route.ts", "src/components/Dashboard.tsx"],
+      briefingSummary: demoBriefing.executiveSummary,
+      whatChanged: demoBriefing.whatChanged,
+      topActions: demoBriefing.suggestedActions.map((a) => a.title),
+      authPath: "src/middleware.ts",
+      billingNote: "Stripe billing lives in the SaaS dashboard; audiolens-app has no billing module yet.",
+    });
+    return result;
+  }
+  return {
+    answer: "Connect a repository and run an audit to enable evidence-backed Q&A.",
+    evidence: [],
+  };
 }
 
 export { DEMO_REPO_ID, DEMO_AUDIT_ID };

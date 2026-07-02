@@ -6,6 +6,6 @@ export async function POST(request: Request) {
   if (!body.question?.trim()) {
     return NextResponse.json({ error: "question required" }, { status: 400 });
   }
-  const answer = await askBrain("demo-user", body.question.trim());
-  return NextResponse.json({ answer });
+  const result = await askBrain("demo-user", body.question.trim());
+  return NextResponse.json(result);
 }

@@ -37,7 +37,7 @@ export default async function ExecutivePage() {
         <p className="text-sm leading-7 text-zinc-300">{briefing?.executiveSummary}</p>
         <p className="text-sm leading-7 text-zinc-400">
           Release readiness: {briefing?.releaseReadiness}. Boswell estimates roughly{" "}
-          <strong>12–18 hours</strong> of focused engineering to clear the current high-priority queue.
+          <strong>{Math.round(briefing?.debtHoursEstimate ?? 0)} hours</strong> of focused engineering to clear the current queue.
         </p>
       </Card>
 

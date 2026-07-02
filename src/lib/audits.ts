@@ -14,6 +14,8 @@ import {
 } from "@/lib/db/schema";
 import { buildCoaching } from "@/lib/coaching/build-coaching";
 import { buildDailyBriefing } from "@/lib/briefing/build-briefing";
+import { enrichFinding } from "@/lib/enrich/finding";
+import { groupByClassification } from "@/lib/classification/classify";
 import { prioritizeFixQueue } from "@/lib/fix-queue/prioritize";
 import { computeRepoScore } from "@/lib/scoring/engine";
 import { getGithubToken } from "@/lib/github";
@@ -190,27 +192,41 @@ export async function runQueuedAudit(auditId: string) {
 
     if (result.findings.length) {
       await db.insert(findings).values(
-        result.findings.map((f) => ({
-          repositoryId: repo.id,
-          auditRunId: run.id,
-          severity: f.severity,
-          category: f.category,
-          title: f.title,
-          description: f.description,
-          filePath: f.filePath,
-          lineStart: f.lineStart,
-          recommendation: f.recommendation,
-          coaching: buildCoaching({
+        result.findings.map((f) => {
+          const enriched = enrichFinding({
             title: f.title,
             description: f.description,
             severity: f.severity,
             category: f.category,
+          });
+          return {
+            repositoryId: repo.id,
+            auditRunId: run.id,
+            severity: f.severity,
+            category: f.category,
+            title: f.title,
+            description: f.description,
             filePath: f.filePath,
+            lineStart: f.lineStart,
             recommendation: f.recommendation,
-          }),
-          confidence: 0.85,
-          autoFixable: f.category === "documentation",
-        })),
+            simpleExplanation: enriched.simpleExplanation,
+            classification: enriched.classification,
+            fixSteps: enriched.canOpenPr
+              ? "Boswell can open a safe PR after confirmation."
+              : "Manual steps required.",
+            autoFixLevel: enriched.autoFixLevel,
+            coaching: buildCoaching({
+              title: f.title,
+              description: f.description,
+              severity: f.severity,
+              category: f.category,
+              filePath: f.filePath,
+              recommendation: f.recommendation,
+            }),
+            confidence: 0.85,
+            autoFixable: enriched.canOpenPr,
+          };
+        }),
       );
     }
 
@@ -253,6 +269,18 @@ export async function runQueuedAudit(auditId: string) {
       releaseRisk: score.dimensions.releaseRisk,
     });
 
+    const classified = groupByClassification(
+      result.findings.map((f) => ({
+        ...enrichFinding({
+          title: f.title,
+          description: f.description,
+          severity: f.severity,
+          category: f.category,
+        }),
+        title: f.title,
+      })),
+    );
+
     const briefing = buildDailyBriefing({
       repoName: repo.fullName,
       currentScore: score,
@@ -265,7 +293,17 @@ export async function runQueuedAudit(auditId: string) {
           href: `/dashboard/audits/${run.id}`,
         })),
       fixedFindings: [],
+      ignoredFindings: [],
       recurringFindings: [],
+      classifications: {
+        good: classified.good.map((f) => f.title),
+        bad: classified.bad.map((f) => f.title),
+        dangerous: classified.dangerous.map((f) => f.title),
+        evil: classified.evil.map((f) => f.title),
+      },
+      safePrTitles: result.findings
+        .filter((f) => enrichFinding({ title: f.title, description: f.description, severity: f.severity, category: f.category }).autoFixLevel === "green")
+        .map((f) => f.title),
       slop: result.slop,
       deployVerdict: result.deployVerdict,
     });

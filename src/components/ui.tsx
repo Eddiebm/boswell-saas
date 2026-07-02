@@ -54,7 +54,7 @@ export function Badge({
   tone = "neutral",
 }: {
   children: ReactNode;
-  tone?: "neutral" | "good" | "warn" | "bad";
+  tone?: "neutral" | "good" | "warn" | "bad" | "evil";
 }) {
   return (
     <span
@@ -64,9 +64,27 @@ export function Badge({
         tone === "good" && "bg-emerald-500/10 text-emerald-300",
         tone === "warn" && "bg-amber-500/10 text-amber-300",
         tone === "bad" && "bg-red-500/10 text-red-300",
+        tone === "evil" && "bg-purple-500/15 text-purple-200 ring-1 ring-purple-500/30",
       )}
     >
       {children}
     </span>
   );
+}
+
+export function ClassificationBadge({ classification }: { classification: string }) {
+  const tone =
+    classification === "good"
+      ? "good"
+      : classification === "bad"
+        ? "warn"
+        : classification === "evil"
+          ? "evil"
+          : "bad";
+  return <Badge tone={tone}>{classification}</Badge>;
+}
+
+export function AutoFixBadge({ level }: { level: string }) {
+  const tone = level === "green" ? "good" : level === "yellow" ? "warn" : "bad";
+  return <Badge tone={tone}>{level.toUpperCase()}</Badge>;
 }
