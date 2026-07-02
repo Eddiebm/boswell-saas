@@ -1,8 +1,20 @@
 # Boswell deployment checklist
 
-## Vercel (web app)
+## Neon database
 
-After `vercel --prod`, set these in **Project → Settings → Environment Variables**:
+Project: **boswell-saas** on Neon (`wispy-feather-16066146`). Schema pushed via `npm run db:push`.
+
+Connection string is in your local `.env.local` (not committed). Copy `DATABASE_URL` to Vercel if re-provisioning.
+
+## Sync env to Vercel
+
+After filling `.env.local`:
+
+```bash
+./scripts/push-vercel-env.sh
+```
+
+Or paste variables manually at [Vercel env settings](https://vercel.com/eddiebms-projects/boswell-saas/settings/environment-variables).
 
 | Variable | Required for live mode |
 |----------|----------------------|
