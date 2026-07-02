@@ -79,6 +79,7 @@ export const users = pgTable("users", {
   stripeCustomerId: text("stripe_customer_id"),
   auditsUsedThisMonth: integer("audits_used_this_month").default(0).notNull(),
   auditMonthKey: text("audit_month_key"),
+  primaryRepositoryId: uuid("primary_repository_id"),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });
 

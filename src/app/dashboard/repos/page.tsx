@@ -5,13 +5,15 @@ import { Card } from "@/components/ui";
 import { ScoreGauge } from "@/components/score-gauge";
 import { RunAuditButton } from "@/components/run-audit-button";
 import { SyncReposButton } from "@/components/sync-repos-button";
-import { getRepositories, getRepoScore, getSlop } from "@/lib/data";
+import { SetPrimaryRepoButton } from "@/components/set-primary-repo-button";
+import { getRepositories, getPrimaryRepoId, getRepoScore, getSlop } from "@/lib/data";
 import { requireUserId } from "@/lib/session";
 import { isDemoMode } from "@/lib/demo/mode";
 
 export default async function ReposPage() {
   const userId = await requireUserId();
   const repos = await getRepositories(userId);
+  const primaryRepoId = await getPrimaryRepoId(userId);
   const enriched = await Promise.all(
     repos.map(async (repo) => ({
       repo,
@@ -52,6 +54,7 @@ export default async function ReposPage() {
             </div>
             <div className="flex flex-col gap-2">
               <RunAuditButton repositoryId={repo.id} />
+              <SetPrimaryRepoButton repositoryId={repo.id} isPrimary={repo.id === primaryRepoId} />
               <Link href={`/dashboard/repos/${repo.id}`} className="text-center text-sm underline">
                 Details
               </Link>

@@ -8,7 +8,7 @@ type BrainResponse = {
   evidence: string[];
 };
 
-export function BrainChat() {
+export function BrainChat({ repositoryId }: { repositoryId: string | null }) {
   const [question, setQuestion] = useState("");
   const [response, setResponse] = useState<BrainResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -31,7 +31,7 @@ export function BrainChat() {
     const res = await fetch("/api/brain", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: q }),
+      body: JSON.stringify({ question: q, repositoryId: repositoryId ?? undefined }),
     });
     const data = (await res.json()) as BrainResponse;
     setResponse(data);

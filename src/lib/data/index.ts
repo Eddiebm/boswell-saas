@@ -40,21 +40,44 @@ import type { FindingClassification } from "@/lib/classification/classify";
 import { canUseExecutiveDashboard, canUseLlmBrain, type PlanId } from "@/lib/plans";
 
 export async function getPrimaryRepoId(userId: string): Promise<string | null> {
+  if (isDemoMode()) return DEMO_REPO_ID;
+  const db = requireDb();
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (user?.primaryRepositoryId) {
+    const owned = await getRepository(userId, user.primaryRepositoryId);
+    if (owned) return user.primaryRepositoryId;
+  }
   const repos = await getRepositories(userId);
   return repos[0]?.id ?? null;
 }
 
+export async function setPrimaryRepository(userId: string, repositoryId: string) {
+  if (isDemoMode()) return;
+  const repo = await getRepository(userId, repositoryId);
+  if (!repo) throw new Error("Repository not found");
+  const db = requireDb();
+  await db
+    .update(users)
+    .set({ primaryRepositoryId: repositoryId })
+    .where(eq(users.id, userId));
+}
+
+export async function getPrimaryRepository(userId: string) {
+  const repoId = await getPrimaryRepoId(userId);
+  if (!repoId) return null;
+  return getRepository(userId, repoId);
+}
+
 export async function getDashboardBriefing(userId: string) {
   if (isDemoMode()) return demoBriefing;
-  const db = requireDb();
-  const repos = await db.select().from(repositories).where(eq(repositories.userId, userId)).limit(1);
-  const repo = repos[0];
-  if (!repo) return null;
+  const repoId = await getPrimaryRepoId(userId);
+  if (!repoId) return null;
 
+  const db = requireDb();
   const runs = await db
     .select()
     .from(auditRuns)
-    .where(eq(auditRuns.repositoryId, repo.id))
+    .where(eq(auditRuns.repositoryId, repoId))
     .orderBy(desc(auditRuns.createdAt))
     .limit(1);
 

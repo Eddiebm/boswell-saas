@@ -24,7 +24,7 @@ async function main() {
 
   const db = drizzle(neon(url), { schema });
 
-  const [user] = await db
+  const inserted = await db
     .insert(schema.users)
     .values({
       id: DEMO_USER_ID,
@@ -35,6 +35,8 @@ async function main() {
     })
     .onConflictDoNothing()
     .returning();
+
+  const user = inserted[0];
 
   console.log("User:", user?.id ?? DEMO_USER_ID);
 

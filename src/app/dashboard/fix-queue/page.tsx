@@ -3,12 +3,13 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
 import { SafeFixPrButton } from "@/components/safe-fix-pr-button";
-import { getFixQueue, getPrimaryRepoId } from "@/lib/data";
+import { getFixQueue, getPrimaryRepoId, getPrimaryRepository } from "@/lib/data";
 import { requireUserId } from "@/lib/session";
 
 export default async function FixQueuePage() {
   const userId = await requireUserId();
   const repoId = await getPrimaryRepoId(userId);
+  const primaryRepo = await getPrimaryRepository(userId);
 
   if (!repoId) {
     return (
@@ -27,6 +28,11 @@ export default async function FixQueuePage() {
         <p className="mt-2 text-zinc-400">
           Ignore most findings. Fix these first. Boswell never pushes to main — only opens PRs for green-tier fixes.
         </p>
+        {primaryRepo ? (
+          <p className="mt-1 text-sm text-zinc-500">
+            Showing queue for <span className="text-zinc-300">{primaryRepo.fullName}</span>
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-4">

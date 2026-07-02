@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { Card } from "@/components/ui";
 import { BrainChat } from "@/components/brain-chat";
-import { getMemory, getPrimaryRepoId } from "@/lib/data";
+import { getMemory, getPrimaryRepoId, getPrimaryRepository } from "@/lib/data";
 import { requireUserId } from "@/lib/session";
 
 const memoryPrompts = [
@@ -16,6 +16,7 @@ const memoryPrompts = [
 export default async function MemoryPage() {
   const userId = await requireUserId();
   const repoId = await getPrimaryRepoId(userId);
+  const primaryRepo = await getPrimaryRepository(userId);
 
   if (!repoId) {
     return (
@@ -34,6 +35,11 @@ export default async function MemoryPage() {
         <p className="mt-2 text-zinc-400">
           Boswell remembers audits, fixes, regressions, and recurring problem areas.
         </p>
+        {primaryRepo ? (
+          <p className="mt-1 text-sm text-zinc-500">
+            Memory for <span className="text-zinc-300">{primaryRepo.fullName}</span>
+          </p>
+        ) : null}
       </div>
 
       <Card>
@@ -45,7 +51,7 @@ export default async function MemoryPage() {
             </span>
           ))}
         </div>
-        <BrainChat />
+        <BrainChat repositoryId={repoId} />
       </Card>
 
       <section className="space-y-3">

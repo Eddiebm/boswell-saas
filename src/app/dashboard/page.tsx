@@ -5,7 +5,7 @@ import { Badge, Button, Card } from "@/components/ui";
 import { ScoreGauge } from "@/components/score-gauge";
 import { RunAuditButton } from "@/components/run-audit-button";
 import { SyncReposButton } from "@/components/sync-repos-button";
-import { getDashboardBriefing, getRepositories, getPrimaryRepoId, getRepoScore } from "@/lib/data";
+import { getDashboardBriefing, getRepositories, getPrimaryRepoId, getPrimaryRepository, getRepoScore } from "@/lib/data";
 import { isDemoMode } from "@/lib/demo/mode";
 import { requireUserId } from "@/lib/session";
 
@@ -14,6 +14,7 @@ export default async function DashboardPage() {
   const briefing = await getDashboardBriefing(userId);
   const repos = await getRepositories(userId);
   const primaryRepoId = await getPrimaryRepoId(userId);
+  const primaryRepo = await getPrimaryRepository(userId);
   const score = primaryRepoId ? await getRepoScore(primaryRepoId) : null;
 
   if (!briefing) {
@@ -48,6 +49,11 @@ export default async function DashboardPage() {
         <div>
           <p className="text-sm uppercase tracking-widest text-zinc-500">Daily CTO Briefing</p>
           <h1 className="mt-2 text-3xl font-semibold">{briefing.greeting}</h1>
+          {primaryRepo ? (
+            <p className="mt-2 text-sm text-zinc-500">
+              Repository: <span className="text-zinc-300">{primaryRepo.fullName}</span>
+            </p>
+          ) : null}
           <p className="mt-3 max-w-2xl text-zinc-400">{briefing.executiveSummary}</p>
           <p className="mt-2 max-w-2xl text-sm leading-7 text-zinc-500">{briefing.plainEnglishSummary}</p>
         </div>

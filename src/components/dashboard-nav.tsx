@@ -3,6 +3,7 @@ import { signOut } from "@/lib/auth";
 import { isDemoMode } from "@/lib/demo/mode";
 import { Button } from "@/components/ui";
 import { NavLink } from "@/components/nav-link";
+import { PrimaryRepoSelector } from "@/components/primary-repo-selector";
 
 const links = [
   { href: "/dashboard", label: "Daily Briefing" },
@@ -18,7 +19,13 @@ const links = [
   { href: "/dashboard/admin", label: "System" },
 ];
 
-export function DashboardNav() {
+export function DashboardNav({
+  repos,
+  primaryRepoId,
+}: {
+  repos: Array<{ id: string; fullName: string }>;
+  primaryRepoId: string | null;
+}) {
   return (
     <header className="border-b border-zinc-800 bg-black/60 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
@@ -32,7 +39,8 @@ export function DashboardNav() {
             ))}
           </nav>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <PrimaryRepoSelector repos={repos} primaryRepoId={primaryRepoId} />
           {isDemoMode() ? (
             <span className="rounded-full bg-amber-500/10 px-2 py-1 text-xs text-amber-300">
               Demo mode
