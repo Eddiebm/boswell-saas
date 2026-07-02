@@ -1,7 +1,11 @@
 import { signIn } from "@/lib/auth";
+import { signInOwner } from "@/lib/auth/owner-bootstrap";
 import { Button, Card } from "@/components/ui";
 
 export default function LoginPage() {
+  const hasBootstrap = Boolean(process.env.GITHUB_BOOTSTRAP_TOKEN);
+  const hasOAuth = Boolean(process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET);
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-black px-6">
       <Card className="w-full max-w-md text-center">
@@ -9,23 +13,37 @@ export default function LoginPage() {
         <p className="mt-3 text-sm text-zinc-400">
           Connect GitHub to import repositories and run cloud audits.
         </p>
-        <form
-          className="mt-8 space-y-3"
-          action={async () => {
-            "use server";
-            await signIn("github", { redirectTo: "/dashboard" });
-          }}
-        >
-          <Button type="submit" className="w-full">
-            Continue with GitHub
-          </Button>
-        </form>
-        {process.env.GITHUB_BOOTSTRAP_TOKEN ? (
-          <p className="mt-4 text-xs text-zinc-500">
-            Owner setup: visit{" "}
-            <code className="text-zinc-400">/api/setup/owner</code> with{" "}
-            <code className="text-zinc-400">x-worker-secret</code> header.
-          </p>
+
+        {hasBootstrap ? (
+          <form
+            className="mt-8"
+            action={async () => {
+              "use server";
+              await signInOwner();
+            }}
+          >
+            <Button type="submit" className="w-full">
+              Continue as owner
+            </Button>
+          </form>
+        ) : null}
+
+        {hasOAuth ? (
+          <form
+            className={hasBootstrap ? "mt-3" : "mt-8"}
+            action={async () => {
+              "use server";
+              await signIn("github", { redirectTo: "/dashboard" });
+            }}
+          >
+            <Button type="submit" className="w-full" variant={hasBootstrap ? "secondary" : "primary"}>
+              Continue with GitHub
+            </Button>
+          </form>
+        ) : null}
+
+        {!hasBootstrap && !hasOAuth ? (
+          <p className="mt-8 text-sm text-red-400">Sign-in is not configured yet.</p>
         ) : null}
       </Card>
     </div>
