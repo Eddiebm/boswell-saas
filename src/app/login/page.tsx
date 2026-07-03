@@ -1,8 +1,24 @@
 import { signIn } from "@/lib/auth";
 import { signInOwner } from "@/lib/auth/owner-bootstrap";
 import { Button, Card } from "@/components/ui";
+import { redirect } from "next/navigation";
 
-export default function LoginPage() {
+function isNextRedirect(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    typeof error.digest === "string" &&
+    error.digest.startsWith("NEXT_REDIRECT")
+  );
+}
+
+type LoginPageProps = {
+  searchParams: Promise<{ error?: string }>;
+};
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const { error } = await searchParams;
   const hasBootstrap = Boolean(process.env.GITHUB_BOOTSTRAP_TOKEN);
   const hasOAuth = Boolean(process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET);
 
@@ -14,12 +30,25 @@ export default function LoginPage() {
           Connect GitHub to import repositories and run cloud audits.
         </p>
 
+        {error ? (
+          <p className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            {error}
+          </p>
+        ) : null}
+
         {hasBootstrap ? (
           <form
             className="mt-8"
             action={async () => {
               "use server";
-              await signInOwner();
+              try {
+                await signInOwner();
+              } catch (error) {
+                if (isNextRedirect(error)) throw error;
+                const message =
+                  error instanceof Error ? error.message : "Sign-in failed";
+                redirect(`/login?error=${encodeURIComponent(message)}`);
+              }
             }}
           >
             <Button type="submit" className="w-full">

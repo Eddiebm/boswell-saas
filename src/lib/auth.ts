@@ -1,4 +1,5 @@
 import NextAuth from "next-auth";
+import type { NextAuthConfig } from "next-auth";
 import GitHub from "next-auth/providers/github";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/lib/db";
@@ -13,25 +14,31 @@ const adapter = db
     })
   : undefined;
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter,
-  providers: [
+const providers: NextAuthConfig["providers"] = [];
+
+if (process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET) {
+  providers.push(
     GitHub({
-      clientId: process.env.AUTH_GITHUB_ID!,
-      clientSecret: process.env.AUTH_GITHUB_SECRET!,
+      clientId: process.env.AUTH_GITHUB_ID,
+      clientSecret: process.env.AUTH_GITHUB_SECRET,
       authorization: {
         params: {
           scope: "read:user user:email repo",
         },
       },
     }),
-  ],
+  );
+}
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  adapter,
+  providers,
   pages: {
     signIn: "/login",
   },
   callbacks: {
     async session({ session, user }) {
-      if (session.user) {
+      if (session.user && user?.id) {
         session.user.id = user.id;
       }
       return session;
