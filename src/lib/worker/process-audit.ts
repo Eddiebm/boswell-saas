@@ -109,7 +109,7 @@ export async function processAuditJob(input: {
   try {
     execFileSync(
       "git",
-      ["clone", "--depth", "1", authedCloneUrl(input.cloneUrl, input.githubToken), repoDir],
+      ["clone", "--depth", "50", authedCloneUrl(input.cloneUrl, input.githubToken), repoDir],
       { stdio: "pipe", env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } },
     );
 

@@ -42,5 +42,6 @@ jobs:
           BOSWELL_ENGINE_GIT_URL: ${{ secrets.BOSWELL_ENGINE_GIT_URL }}
           BOSWELL_CLOUD_WORKER: "1"
           BOSWELL_PYTHON: python
+          BOSWELL_SKIP_ENGINE_INSTALL: "1"
           NODE_ENV: production
         run: npx tsx scripts/worker-once.ts
