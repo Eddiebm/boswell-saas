@@ -1,6 +1,8 @@
 import { parseAuditMarkdown, parseLeakMetadata } from "@/lib/parsers/audit-parser";
 import { scanAiSlop, type SlopResult } from "@/lib/slop/engine";
 import type { ScoreInput } from "@/lib/scoring/types";
+import type { AuditMode } from "@/lib/audit-modes";
+import { normalizeAuditMode } from "@/lib/audit-modes";
 import { installBoswellEngine, runBoswellEngine } from "@/lib/worker/boswell-engine";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -94,6 +96,7 @@ export async function processAuditJob(input: {
   cloneUrl: string;
   githubToken: string;
   repoFullName: string;
+  auditMode?: AuditMode;
 }): Promise<ProcessAuditResult> {
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   if (!openRouterKey) {
@@ -114,7 +117,7 @@ export async function processAuditJob(input: {
     );
 
     installBoswellEngine(engineSpec);
-    runBoswellEngine(repoDir, openRouterKey);
+    runBoswellEngine(repoDir, openRouterKey, normalizeAuditMode(input.auditMode));
 
     const boswellDir = path.join(repoDir, ".boswell");
     const audit = readIfExists(path.join(boswellDir, "audit.md"));

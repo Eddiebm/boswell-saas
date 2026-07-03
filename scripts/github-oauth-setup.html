@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Boswell GitHub App</title></head>
+<body>
+<p>Redirecting to GitHub to create the Boswell app…</p>
+<form id="f" method="post" action="https://github.com/settings/apps/new?state=eb6c76b39034157370e50cb1b3c8a870">
+  <input type="hidden" name="manifest" value='{"name":"boswell-saas-20260703","url":"https://boswell-saas.vercel.app","description":"Boswell Cloud — repo audits and engineering memory","redirect_url":"http://localhost:3847/callback","callback_urls":["https://boswell-saas.vercel.app/api/auth/callback/github","http://localhost:3000/api/auth/callback/github"],"public":false,"request_oauth_on_install":true,"default_permissions":{"metadata":"read","contents":"read"},"default_events":[]}' />
+</form>
+<script>document.getElementById('f').submit();</script>
+</body></html>

@@ -31,8 +31,12 @@ import {
   users,
 } from "@/lib/db/schema";
 import { getAuditForUser } from "@/lib/audits";
+import { normalizeAuditMode, type AuditMode } from "@/lib/audit-modes";
 import { generateAuditReport, reportToMarkdown } from "@/lib/reports/generate-report";
+import { buildFixPrompt } from "@/lib/reports/fix-prompt";
+import { groupByPriority, prioritizeFindings } from "@/lib/reports/prioritize-findings";
 import type { DailyBriefing } from "@/lib/briefing/build-briefing";
+import type { CoachingSections } from "@/lib/coaching/build-coaching";
 import type { RepoScoreResult } from "@/lib/scoring/types";
 import { emptySlopResult, type SlopResult } from "@/lib/slop/engine";
 import type { AutoFixLevel } from "@/lib/automation/safe-fix-policy";
@@ -227,23 +231,37 @@ export async function getMemory(repoId: string) {
   }));
 }
 
+export type AuditFindingView = {
+  id: string;
+  title: string;
+  description: string;
+  severity: string;
+  classification: FindingClassification;
+  autoFixLevel: AutoFixLevel;
+  filePath?: string;
+  coaching: unknown;
+  evidence: string[];
+  priority: ReturnType<typeof prioritizeFindings>[number]["priority"];
+  priorityLabel: string;
+};
+
 export type AuditReportView = {
   id: string;
   status: string;
   error?: string | null;
+  repoFullName: string;
+  auditMode: AuditMode;
+  costUsd?: string | null;
+  consumerSummary: string;
+  fixPrompt: string;
   markdown: string;
   structured: ReturnType<typeof generateAuditReport> | null;
-  findings: Array<{
-    id: string;
-    title: string;
-    description: string;
-    severity: string;
-    classification: FindingClassification;
-    autoFixLevel: AutoFixLevel;
-    filePath?: string;
-    coaching: unknown;
-    evidence: string[];
-  }>;
+  findings: AuditFindingView[];
+  priorityGroups: {
+    fixNow: AuditFindingView[];
+    fixNext: AuditFindingView[];
+    later: AuditFindingView[];
+  };
   briefing: DailyBriefing;
   score: RepoScoreResult;
   slop: SlopResult;
@@ -252,12 +270,28 @@ export type AuditReportView = {
 
 export async function getAuditReport(userId: string, auditId: string): Promise<AuditReportView | null> {
   if (isDemoMode()) {
+    const demoPrioritized = prioritizeFindings(demoFindings);
+    const demoPrompt = buildFixPrompt({
+      repoName: "Eddiebm/audiolens-app",
+      stack: ["Next.js", "React"],
+      consumerSummary: demoBriefing.plainEnglishSummary,
+      releaseReadiness: demoBriefing.releaseReadiness,
+      briefing: demoBriefing,
+      findings: demoFindings,
+      costUsd: "0.32",
+    });
     return {
       id: auditId,
       status: "completed",
+      repoFullName: "Eddiebm/audiolens-app",
+      auditMode: "standard",
+      costUsd: "0.32",
+      consumerSummary: demoBriefing.plainEnglishSummary,
+      fixPrompt: demoPrompt,
       markdown: demoAuditMarkdown,
       structured: demoStructuredReport,
-      findings: demoFindings,
+      findings: demoPrioritized,
+      priorityGroups: groupByPriority(demoPrioritized),
       briefing: demoBriefing,
       score: demoScore,
       slop: demoSlop,
@@ -314,17 +348,19 @@ export async function getAuditReport(userId: string, auditId: string): Promise<A
     healthDelta: null,
   };
 
-  const mappedFindings = runFindings.map((f) => ({
-    id: f.id,
-    title: f.title,
-    description: f.description,
-    severity: f.severity,
-    classification: (f.classification ?? "bad") as FindingClassification,
-    autoFixLevel: (f.autoFixLevel ?? "red") as AutoFixLevel,
-    filePath: f.filePath ?? undefined,
-    coaching: f.coaching,
-    evidence: (f.evidence as string[] | null) ?? [],
-  }));
+  const mappedFindings = prioritizeFindings(
+    runFindings.map((f) => ({
+      id: f.id,
+      title: f.title,
+      description: f.description,
+      severity: f.severity,
+      classification: (f.classification ?? "bad") as FindingClassification,
+      autoFixLevel: (f.autoFixLevel ?? "red") as AutoFixLevel,
+      filePath: f.filePath ?? undefined,
+      coaching: f.coaching,
+      evidence: (f.evidence as string[] | null) ?? [],
+    })),
+  );
 
   let structured = (primaryReport?.structured as ReturnType<typeof generateAuditReport> | null) ?? null;
   if (!structured && run.status === "completed") {
@@ -352,13 +388,44 @@ export async function getAuditReport(userId: string, auditId: string): Promise<A
     primaryReport?.markdown ??
     (structured ? reportToMarkdown(structured) : audit.docs.find((d) => d.docType === "audit")?.content ?? "");
 
+  const consumerSummary =
+    audit.docs.find((d) => d.docType === "audit-simple")?.content ??
+    briefing.plainEnglishSummary ??
+    run.summary ??
+    "";
+
+  const fixPrompt = buildFixPrompt({
+    repoName: repo.fullName,
+    stack: (run.stack as string[] | null) ?? [],
+    consumerSummary,
+    releaseReadiness: briefing.releaseReadiness,
+    topRisk: run.topRisk,
+    briefing,
+    findings: mappedFindings.map((f) => ({
+      id: f.id,
+      title: f.title,
+      description: f.description,
+      severity: f.severity,
+      classification: f.classification,
+      filePath: f.filePath,
+      coaching: f.coaching as CoachingSections | null,
+    })),
+    costUsd: run.costUsd,
+  });
+
   return {
     id: auditId,
     status: run.status,
     error: run.error,
+    repoFullName: repo.fullName,
+    auditMode: normalizeAuditMode(run.auditMode),
+    costUsd: run.costUsd,
+    consumerSummary,
+    fixPrompt,
     markdown,
     structured,
     findings: mappedFindings,
+    priorityGroups: groupByPriority(mappedFindings),
     briefing,
     score,
     slop,

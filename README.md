@@ -50,10 +50,9 @@ cp .env.example .env.local
 # Fill DATABASE_URL, AUTH_*, OPENROUTER_API_KEY, WORKER_SECRET
 npm run db:push
 npm run dev:live    # NOT npm run dev (that enables demo mode)
-npm run worker      # separate terminal — required for audits
 ```
 
-Sign in → Sync repos → Run audit. The worker processes queued jobs; Vercel cannot run audits.
+Sign in → Sync repos → Run audit. **Production audits run on GitHub Actions** (every 2 minutes). For local worker dev only: `BOSWELL_ALLOW_LOCAL_WORKER=1 npm run worker`.
 
 ## Tests
 
@@ -70,7 +69,7 @@ See `docs/` for architecture, deployment, scoring methodology, and safety policy
 - **Web:** Next.js 16 App Router on Vercel
 - **DB:** Neon Postgres + Drizzle ORM
 - **Auth:** NextAuth (GitHub)
-- **Audits:** Boswell Python engine via background worker (`npm run worker`)
+- **Audits:** Boswell Python engine via GitHub Actions worker (`.github/workflows/audit-worker.yml`)
 - **Scoring:** TypeScript deterministic weights (LLM explains, does not invent scores)
 
 ## Pages

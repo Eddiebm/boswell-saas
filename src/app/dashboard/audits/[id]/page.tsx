@@ -3,8 +3,10 @@ export const dynamic = "force-dynamic";
 import { notFound } from "next/navigation";
 import { getAuditReport } from "@/lib/data";
 import type { CoachingSections } from "@/lib/coaching/build-coaching";
+import { auditModeLabel } from "@/lib/audit-modes";
 import { AuditPoller } from "@/components/audit-poller";
 import { AuditStatusBadge } from "@/components/audit-status-badge";
+import { CopyFixPromptButton } from "@/components/copy-fix-prompt-button";
 import { MarkdownViewer } from "@/components/markdown-viewer";
 import { CoachingCard } from "@/components/coaching-card";
 import { AutoFixBadge, Badge, Card, ClassificationBadge } from "@/components/ui";
@@ -25,8 +27,12 @@ export default async function AuditDetailPage({ params }: Params) {
     <div className="space-y-8">
       <AuditPoller status={report.status} />
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-3xl font-semibold">Audit report</h1>
+        <div>
+          <h1 className="text-3xl font-semibold">Audit report</h1>
+          <p className="mt-1 text-sm text-zinc-400">{report.repoFullName}</p>
+        </div>
         <AuditStatusBadge status={report.status} />
+        <Badge tone="neutral">{auditModeLabel(report.auditMode)}</Badge>
       </div>
 
       {report.status === "failed" ? (
@@ -43,14 +49,14 @@ export default async function AuditDetailPage({ params }: Params) {
         <Card>
           <p className="text-zinc-300">Audit is {report.status}…</p>
           <p className="mt-2 text-sm text-zinc-500">
-            Run <code className="text-zinc-400">npm run worker</code> in a separate terminal if this takes more than a minute.
+            The cloud worker usually picks this up within a couple of minutes.
           </p>
         </Card>
       ) : null}
 
       {report.status === "completed" ? (
         <>
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-5">
             <ScoreGauge score={report.score.overall} label="Health at audit time" />
             <Card>
               <p className="text-sm text-zinc-400">AI Slop</p>
@@ -65,7 +71,32 @@ export default async function AuditDetailPage({ params }: Params) {
               <p className="text-sm text-zinc-400">Release readiness</p>
               <p className="mt-2 font-medium">{report.briefing.releaseReadiness}</p>
             </Card>
+            <Card>
+              <p className="text-sm text-zinc-400">Audit cost</p>
+              <p className="mt-2 text-3xl font-semibold">
+                {report.costUsd ? `$${Number(report.costUsd).toFixed(2)}` : "—"}
+              </p>
+            </Card>
           </div>
+
+          <section className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-xl font-medium">Plain-English summary</h2>
+              <CopyFixPromptButton prompt={report.fixPrompt} />
+            </div>
+            <Card>
+              <MarkdownViewer content={report.consumerSummary} />
+            </Card>
+            <p className="text-sm text-zinc-500">
+              Copy the fix prompt above into Claude Code, ChatGPT, or Cursor to implement the fixes in your repo.
+            </p>
+          </section>
+
+          <section className="grid gap-4 lg:grid-cols-3">
+            <PriorityCard title="Fix now" items={report.priorityGroups.fixNow} tone="bad" />
+            <PriorityCard title="Fix next" items={report.priorityGroups.fixNext} tone="warn" />
+            <PriorityCard title="Can wait" items={report.priorityGroups.later} tone="neutral" />
+          </section>
 
           {report.structured ? (
             <section className="grid gap-4 lg:grid-cols-2">
@@ -81,6 +112,7 @@ export default async function AuditDetailPage({ params }: Params) {
             {report.findings.map((f) => (
               <div key={f.id} id={f.id}>
                 <div className="mb-2 flex flex-wrap gap-2">
+                  <Badge tone="neutral">{f.priorityLabel}</Badge>
                   <ClassificationBadge classification={f.classification} />
                   <AutoFixBadge level={f.autoFixLevel} />
                   <Badge tone="neutral">{f.severity}</Badge>
@@ -91,7 +123,7 @@ export default async function AuditDetailPage({ params }: Params) {
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-xl font-medium">Full audit markdown</h2>
+            <h2 className="text-xl font-medium">Technical audit markdown</h2>
             <Card>
               <MarkdownViewer content={report.markdown} />
             </Card>
@@ -99,6 +131,37 @@ export default async function AuditDetailPage({ params }: Params) {
         </>
       ) : null}
     </div>
+  );
+}
+
+function PriorityCard({
+  title,
+  items,
+  tone,
+}: {
+  title: string;
+  items: Array<{ id: string; title: string; filePath?: string }>;
+  tone: "good" | "warn" | "bad" | "evil" | "neutral";
+}) {
+  return (
+    <Card>
+      <div className="flex items-center gap-2">
+        <Badge tone={tone}>{title}</Badge>
+        <span className="text-xs text-zinc-500">{items.length}</span>
+      </div>
+      <ul className="mt-3 space-y-2 text-sm text-zinc-400">
+        {items.length ? (
+          items.map((item) => (
+            <li key={item.id}>
+              <span className="text-zinc-200">{item.title}</span>
+              {item.filePath ? <span className="text-zinc-500"> — {item.filePath}</span> : null}
+            </li>
+          ))
+        ) : (
+          <li>None</li>
+        )}
+      </ul>
+    </Card>
   );
 }
 

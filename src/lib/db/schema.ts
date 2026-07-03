@@ -161,6 +161,7 @@ export const auditRuns = pgTable("audit_runs", {
     .notNull()
     .references(() => repositories.id, { onDelete: "cascade" }),
   status: auditStatusEnum("status").default("queued").notNull(),
+  auditMode: text("audit_mode").default("standard").notNull(),
   commitSha: text("commit_sha"),
   stack: jsonb("stack").$type<string[]>().default([]),
   costUsd: numeric("cost_usd", { precision: 10, scale: 4 }),

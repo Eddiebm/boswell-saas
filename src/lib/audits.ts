@@ -24,8 +24,10 @@ import {
   getPlanLimits,
   type PlanId,
 } from "@/lib/plans";
-import { processAuditJob } from "@/lib/worker/process-audit";
+import type { AuditMode } from "@/lib/audit-modes";
+import { normalizeAuditMode } from "@/lib/audit-modes";
 import { generateAuditReport, reportToMarkdown } from "@/lib/reports/generate-report";
+import { processAuditJob } from "@/lib/worker/process-audit";
 
 export async function listAuditsForUser(userId: string) {
   const db = requireDb();
@@ -37,6 +39,7 @@ export async function listAuditsForUser(userId: string) {
       deployVerdict: auditRuns.deployVerdict,
       topRisk: auditRuns.topRisk,
       costUsd: auditRuns.costUsd,
+      auditMode: auditRuns.auditMode,
       createdAt: auditRuns.createdAt,
       finishedAt: auditRuns.finishedAt,
       repoFullName: repositories.fullName,
@@ -100,9 +103,10 @@ async function ensureAuditQuota(userId: string) {
   }
 }
 
-export async function queueAudit(userId: string, repositoryId: string) {
+export async function queueAudit(userId: string, repositoryId: string, auditMode: AuditMode = "standard") {
   const db = requireDb();
   await ensureAuditQuota(userId);
+  const mode = normalizeAuditMode(auditMode);
 
   const [repo] = await db
     .select()
@@ -120,6 +124,7 @@ export async function queueAudit(userId: string, repositoryId: string) {
       userId,
       repositoryId,
       status: "queued",
+      auditMode: mode,
     })
     .returning();
 
@@ -192,6 +197,7 @@ export async function runQueuedAudit(auditId: string) {
       cloneUrl: repo.cloneUrl,
       githubToken: token,
       repoFullName: repo.fullName,
+      auditMode: normalizeAuditMode(run.auditMode),
     });
 
     await db.insert(auditDocuments).values(

@@ -23,6 +23,7 @@ export default async function AuditsPage() {
               <p className="font-medium">{audit.repoFullName}</p>
               <p className="text-sm text-zinc-400">
                 {audit.deployVerdict ?? audit.summary ?? "Audit run"}
+                {audit.costUsd ? ` · ~$${Number(audit.costUsd).toFixed(2)}` : ""}
               </p>
             </div>
             <div className="flex items-center gap-3">

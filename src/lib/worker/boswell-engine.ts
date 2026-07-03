@@ -1,6 +1,8 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import type { AuditMode } from "@/lib/audit-modes";
+import { normalizeAuditMode } from "@/lib/audit-modes";
 
 const MIN_AUDIT_CHARS = 200;
 
@@ -16,12 +18,11 @@ function runPython(args: string[], env: NodeJS.ProcessEnv, timeoutMs?: number) {
   });
 }
 
+const RUNNER_SCRIPT = path.join(process.cwd(), "scripts", "boswell-run-audit.py");
+
 export function installBoswellEngine(engineSpec: string) {
   if (process.env.BOSWELL_SKIP_ENGINE_INSTALL === "1") {
-    const verify = runPython(
-      ["-c", "import boswell; from boswell.cli import _run_single_repo; print('ok')"],
-      process.env,
-    );
+    const verify = runPython(["-c", "import boswell; print('ok')"], process.env);
     if (verify.status !== 0) {
       throw new Error(`Boswell engine import failed: ${verify.stderr || verify.stdout}`);
     }
@@ -42,60 +43,27 @@ export function installBoswellEngine(engineSpec: string) {
     );
   }
 
-  const verify = runPython(
-    ["-c", "import boswell; from boswell.cli import _run_single_repo; print('ok')"],
-    env,
-  );
+  const verify = runPython(["-c", "import boswell; print('ok')"], env);
   if (verify.status !== 0) {
     throw new Error(`Boswell engine import failed: ${verify.stderr || verify.stdout}`);
   }
 }
 
-function engineRunScript(repoDir: string) {
-  return [
-    "import json, os, sys",
-    "from pathlib import Path",
-    "from boswell.cli import _run_single_repo",
-    "",
-    `repo = Path(${JSON.stringify(repoDir)})`,
-    'api_key = os.environ.get("OPENROUTER_API_KEY", "")',
-    'if not api_key:',
-    '    print(json.dumps({"ok": False, "error": "OPENROUTER_API_KEY is not set"}))',
-    "    sys.exit(1)",
-    "",
-    "result = _run_single_repo(",
-    "    repo_path=repo,",
-    "    api_key=api_key,",
-    "    skip_confirm=True,",
-    "    prompt_context=False,",
-    ")",
-    "",
-    'if result.get("error"):',
-    '    print(json.dumps({"ok": False, "error": result["error"], "result": result}))',
-    "    sys.exit(1)",
-    "",
-    'audit_path = repo / ".boswell" / "audit.md"',
-    "if not audit_path.exists():",
-    '    print(json.dumps({"ok": False, "error": "Boswell did not write .boswell/audit.md", "result": result}))',
-    "    sys.exit(1)",
-    "",
-    'audit_text = audit_path.read_text(encoding="utf-8")',
-    `if len(audit_text.strip()) < ${MIN_AUDIT_CHARS}:`,
-    '    print(json.dumps({"ok": False, "error": f"audit.md too short ({len(audit_text)} chars)", "result": result}))',
-    "    sys.exit(1)",
-    "",
-    'print(json.dumps({"ok": True, "result": result}))',
-  ].join("\n");
-}
-
-export function runBoswellEngine(repoDir: string, openRouterKey: string) {
+export function runBoswellEngine(
+  repoDir: string,
+  openRouterKey: string,
+  auditMode: AuditMode = "standard",
+) {
+  const mode = normalizeAuditMode(auditMode);
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     OPENROUTER_API_KEY: openRouterKey,
+    BOSWELL_AUDIT_MODE: mode,
+    BOSWELL_MIN_AUDIT_CHARS: String(MIN_AUDIT_CHARS),
     PYTHONUNBUFFERED: "1",
   };
 
-  const run = runPython(["-c", engineRunScript(repoDir)], env, 25 * 60 * 1000);
+  const run = runPython([RUNNER_SCRIPT, repoDir], env, 25 * 60 * 1000);
 
   const stdout = run.stdout?.trim() ?? "";
   const stderr = run.stderr?.trim() ?? "";
@@ -119,5 +87,5 @@ export function runBoswellEngine(repoDir: string, openRouterKey: string) {
     );
   }
 
-  return { stdout, stderr };
+  return { stdout, stderr, mode };
 }
