@@ -30,8 +30,9 @@ jobs:
 
       - name: Install Boswell engine
         run: |
-          pip install "boswell @ git+https://github.com/Eddiebm/boswell.git"
-          boswell --version || true
+          python -m pip install --upgrade pip
+          python -m pip install "git+https://github.com/Eddiebm/boswell.git"
+          python -c "import boswell; from boswell.cli import main; print('boswell ok')"
 
       - name: Process next queued audit
         env:

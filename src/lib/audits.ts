@@ -459,6 +459,25 @@ export async function runQueuedAudit(auditId: string) {
   }
 }
 
+export async function requeueFailedAudit(auditId: string) {
+  const db = requireDb();
+  const [updated] = await db
+    .update(auditRuns)
+    .set({
+      status: "queued",
+      error: null,
+      startedAt: null,
+      finishedAt: null,
+    })
+    .where(and(eq(auditRuns.id, auditId), eq(auditRuns.status, "failed")))
+    .returning();
+
+  if (!updated) {
+    throw new Error("Audit not found or not in failed status");
+  }
+  return updated;
+}
+
 export async function processWorkerTick() {
   await recoverStuckAudits();
   const claimed = await claimNextQueuedAudit();

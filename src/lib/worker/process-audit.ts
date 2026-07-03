@@ -1,7 +1,8 @@
 import { parseAuditMarkdown, parseLeakMetadata } from "@/lib/parsers/audit-parser";
 import { scanAiSlop, type SlopResult } from "@/lib/slop/engine";
 import type { ScoreInput } from "@/lib/scoring/types";
-import { execFileSync, spawnSync } from "node:child_process";
+import { installBoswellEngine, runBoswellEngine } from "@/lib/worker/boswell-engine";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -112,28 +113,8 @@ export async function processAuditJob(input: {
       { stdio: "pipe", env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } },
     );
 
-    spawnSync("python3", ["-m", "pip", "install", engineSpec], {
-      stdio: "pipe",
-      env: process.env,
-    });
-
-    const run = spawnSync(
-      "boswell",
-      ["run", repoDir, "--skip-confirm"],
-      {
-        stdio: "pipe",
-        env: {
-          ...process.env,
-          OPENROUTER_API_KEY: openRouterKey,
-        },
-        encoding: "utf8",
-        timeout: 20 * 60 * 1000,
-      },
-    );
-
-    if (run.status !== 0) {
-      throw new Error(run.stderr || run.stdout || "Boswell run failed");
-    }
+    installBoswellEngine(engineSpec);
+    runBoswellEngine(repoDir, openRouterKey);
 
     const boswellDir = path.join(repoDir, ".boswell");
     const audit = readIfExists(path.join(boswellDir, "audit.md"));

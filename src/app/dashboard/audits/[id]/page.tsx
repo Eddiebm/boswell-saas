@@ -34,7 +34,7 @@ export default async function AuditDetailPage({ params }: Params) {
           <p className="font-medium text-red-300">Audit failed</p>
           <p className="mt-2 text-sm text-zinc-400">{report.error ?? "Unknown error"}</p>
           <p className="mt-2 text-xs text-zinc-500">
-            Ensure the worker is running with OPENROUTER_API_KEY, git, and python3 available.
+            The cloud worker retries automatically. Start a new audit if this keeps failing.
           </p>
         </Card>
       ) : null}
