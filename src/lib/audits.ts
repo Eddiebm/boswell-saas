@@ -479,6 +479,17 @@ export async function requeueFailedAudit(auditId: string) {
 }
 
 export async function processWorkerTick() {
+  if (
+    process.env.BOSWELL_CLOUD_WORKER !== "1" &&
+    process.env.BOSWELL_ALLOW_LOCAL_WORKER !== "1"
+  ) {
+    return {
+      processed: false as const,
+      message:
+        "Worker disabled locally. GitHub Actions sets BOSWELL_CLOUD_WORKER=1. For dev: BOSWELL_ALLOW_LOCAL_WORKER=1",
+    };
+  }
+
   await recoverStuckAudits();
   const claimed = await claimNextQueuedAudit();
   if (!claimed) {

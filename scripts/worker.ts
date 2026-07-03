@@ -16,6 +16,16 @@ function startHealthServer() {
 }
 
 async function main() {
+  if (
+    process.env.BOSWELL_CLOUD_WORKER !== "1" &&
+    process.env.BOSWELL_ALLOW_LOCAL_WORKER !== "1"
+  ) {
+    console.error(
+      "Local worker disabled. Audits run on GitHub Actions. Set BOSWELL_ALLOW_LOCAL_WORKER=1 to run locally.",
+    );
+    process.exit(1);
+  }
+
   startHealthServer();
   console.log("Boswell worker started");
   while (true) {
