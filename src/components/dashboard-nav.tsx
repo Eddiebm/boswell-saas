@@ -4,19 +4,22 @@ import { isDemoMode } from "@/lib/demo/mode";
 import { Button } from "@/components/ui";
 import { NavLink } from "@/components/nav-link";
 import { PrimaryRepoSelector } from "@/components/primary-repo-selector";
+import { NavMoreMenu } from "@/components/nav-more-menu";
 
-const links = [
-  { href: "/dashboard", label: "Daily Briefing" },
-  { href: "/dashboard/onboarding", label: "Setup" },
-  { href: "/dashboard/executive", label: "Executive" },
+const primaryLinks = [
+  { href: "/dashboard", label: "Home" },
   { href: "/dashboard/repos", label: "Repositories" },
   { href: "/dashboard/audits", label: "Audits" },
-  { href: "/dashboard/fix-queue", label: "Fix Queue" },
-  { href: "/dashboard/memory", label: "Memory" },
-  { href: "/dashboard/brain", label: "Engineering Brain" },
-  { href: "/dashboard/settings", label: "Settings" },
+];
+
+const moreLinks = [
+  { href: "/dashboard/executive", label: "Executive summary" },
+  { href: "/dashboard/fix-queue", label: "Fix queue" },
+  { href: "/dashboard/memory", label: "Engineering memory" },
+  { href: "/dashboard/brain", label: "Engineering brain" },
   { href: "/dashboard/billing", label: "Billing" },
-  { href: "/dashboard/admin", label: "System" },
+  { href: "/dashboard/settings", label: "Settings" },
+  { href: "/dashboard/admin", label: "System status" },
 ];
 
 export function DashboardNav({
@@ -27,16 +30,17 @@ export function DashboardNav({
   primaryRepoId: string | null;
 }) {
   return (
-    <header className="border-b border-zinc-800 bg-black/60 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-8">
+    <header className="sticky top-0 z-30 border-b border-zinc-800 bg-black/80 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-8">
           <Link href="/dashboard" className="text-lg font-semibold text-white">
             Boswell
           </Link>
-          <nav className="flex flex-wrap gap-x-4 gap-y-2">
-            {links.map((link) => (
+          <nav className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            {primaryLinks.map((link) => (
               <NavLink key={link.href} href={link.href} label={link.label} />
             ))}
+            <NavMoreMenu links={moreLinks} />
           </nav>
         </div>
         <div className="flex flex-wrap items-center gap-3">
