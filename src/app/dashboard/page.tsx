@@ -5,7 +5,8 @@ import { Badge, Button, Card } from "@/components/ui";
 import { ScoreGauge } from "@/components/score-gauge";
 import { RunAuditButton } from "@/components/run-audit-button";
 import { SyncReposButton } from "@/components/sync-repos-button";
-import { getDashboardBriefing, getRepositories, getPrimaryRepoId, getPrimaryRepository, getRepoScore } from "@/lib/data";
+import { getDashboardBriefing, getLatestCompletedAuditId, getRepositories, getPrimaryRepoId, getPrimaryRepository, getRepoScore, getAuditReport } from "@/lib/data";
+import { FixAllIssuesCard } from "@/components/fix-all-issues-card";
 import { isDemoMode } from "@/lib/demo/mode";
 import { requireUserId } from "@/lib/session";
 
@@ -16,6 +17,10 @@ export default async function DashboardPage() {
   const primaryRepoId = await getPrimaryRepoId(userId);
   const primaryRepo = await getPrimaryRepository(userId);
   const score = primaryRepoId ? await getRepoScore(primaryRepoId) : null;
+  const latestCompleted = await getLatestCompletedAuditId(userId);
+  const latestReport = latestCompleted
+    ? await getAuditReport(userId, latestCompleted.auditId)
+    : null;
 
   if (!briefing) {
     return (
@@ -45,6 +50,14 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {latestReport?.status === "completed" ? (
+        <FixAllIssuesCard
+          auditId={latestReport.id}
+          repoFullName={latestReport.repoFullName}
+          findingsCount={latestReport.findings.length}
+        />
+      ) : null}
+
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm uppercase tracking-widest text-zinc-500">Daily CTO Briefing</p>

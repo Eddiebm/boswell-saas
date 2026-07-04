@@ -94,7 +94,11 @@ Answer in plain English:
 Create a prioritized table with Priority, Issue, Why it matters, Files, Risk, Effort, Safe to auto-fix.
 
 ### Phase 3 — Implement fixes
-Start with all P0 issues, then P1 if safe.
+Fix ALL issues listed above, in priority order:
+1. Fix every item in "Fix now"
+2. Then fix every item in "Fix next"
+3. Then fix items in "Can wait" if time allows
+Do not stop after the first few fixes. Continue until every listed issue has been addressed or you are blocked and explain why.
 
 ### Phase 4 — Final handoff
 Return summary of fixes, remaining risks, deploy checklist, and suggested commit messages.

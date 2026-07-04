@@ -79,18 +79,19 @@ export default async function AuditDetailPage({ params }: Params) {
             </Card>
           </div>
 
-          <section className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <section id="fix-prompt" className="space-y-4 scroll-mt-24">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4">
               <div>
-                <h2 className="text-xl font-medium">Fix prompt for your LLM</h2>
-                <p className="mt-1 text-sm text-zinc-500">
-                  Paste this into Claude Code, ChatGPT, or Cursor in {report.repoFullName}.
+                <h2 className="text-2xl font-semibold text-white">Fix all issues — LLM prompt</h2>
+                <p className="mt-1 text-sm text-zinc-300">
+                  Copy this entire prompt into Claude Code, ChatGPT, or Cursor in{" "}
+                  <strong>{report.repoFullName}</strong> to fix all {report.findings.length} issues.
                 </p>
               </div>
               <CopyFixPromptButton prompt={report.fixPrompt} />
             </div>
-            <Card>
-              <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-sm text-zinc-300">
+            <Card className="border-emerald-500/20">
+              <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap text-sm text-zinc-200">
                 {report.fixPrompt}
               </pre>
             </Card>

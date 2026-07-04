@@ -72,6 +72,22 @@ export async function getPrimaryRepository(userId: string) {
   return getRepository(userId, repoId);
 }
 
+export async function getLatestCompletedAuditId(userId: string) {
+  if (isDemoMode()) return { auditId: DEMO_AUDIT_ID, repoFullName: "Eddiebm/audiolens-app" };
+  const db = requireDb();
+  const [row] = await db
+    .select({
+      auditId: auditRuns.id,
+      repoFullName: repositories.fullName,
+    })
+    .from(auditRuns)
+    .innerJoin(repositories, eq(auditRuns.repositoryId, repositories.id))
+    .where(and(eq(auditRuns.userId, userId), eq(auditRuns.status, "completed")))
+    .orderBy(desc(auditRuns.finishedAt))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function getDashboardBriefing(userId: string) {
   if (isDemoMode()) return demoBriefing;
   const repoId = await getPrimaryRepoId(userId);

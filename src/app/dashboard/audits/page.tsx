@@ -28,6 +28,11 @@ export default async function AuditsPage() {
             </div>
             <div className="flex items-center gap-3">
               <AuditStatusBadge status={audit.status} />
+              {audit.status === "completed" ? (
+                <Link href={`/dashboard/audits/${audit.id}#fix-prompt`} className="text-sm font-medium text-emerald-300 underline">
+                  Fix all issues
+                </Link>
+              ) : null}
               <Link href={`/dashboard/audits/${audit.id}`} className="text-sm underline">
                 View
               </Link>
