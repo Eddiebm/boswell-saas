@@ -81,15 +81,26 @@ export default async function AuditDetailPage({ params }: Params) {
 
           <section className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-xl font-medium">Plain-English summary</h2>
+              <div>
+                <h2 className="text-xl font-medium">Fix prompt for your LLM</h2>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Paste this into Claude Code, ChatGPT, or Cursor in {report.repoFullName}.
+                </p>
+              </div>
               <CopyFixPromptButton prompt={report.fixPrompt} />
             </div>
             <Card>
+              <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-sm text-zinc-300">
+                {report.fixPrompt}
+              </pre>
+            </Card>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-xl font-medium">Plain-English summary</h2>
+            <Card>
               <MarkdownViewer content={report.consumerSummary} />
             </Card>
-            <p className="text-sm text-zinc-500">
-              Copy the fix prompt above into Claude Code, ChatGPT, or Cursor to implement the fixes in your repo.
-            </p>
           </section>
 
           <section className="grid gap-4 lg:grid-cols-3">
