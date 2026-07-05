@@ -29,6 +29,7 @@ import { normalizeAuditMode } from "@/lib/audit-modes";
 import { generateAuditReport, reportToMarkdown } from "@/lib/reports/generate-report";
 import { processAuditJob } from "@/lib/worker/process-audit";
 import { sendAuditAlert } from "@/lib/alerts/audit-alerts";
+import { triggerAuditWorkerDispatch } from "@/lib/worker/trigger-worker";
 
 export async function listAuditsForUser(userId: string) {
   const db = requireDb();
@@ -131,6 +132,10 @@ export async function queueAudit(userId: string, repositoryId: string, auditMode
     })
     .returning();
 
+  void triggerAuditWorkerDispatch().catch(() => {
+    /* cron fallback */
+  });
+
   return run;
 }
 
@@ -169,12 +174,12 @@ export async function claimNextQueuedAudit() {
   return updated ?? null;
 }
 
-const QUEUED_TIMEOUT_MS = 5 * 60 * 1000;
+const QUEUED_TIMEOUT_MS = 60 * 60 * 1000;
 const RUNNING_TIMEOUT_MS = 25 * 60 * 1000;
 const MAX_AUDIT_RETRIES = 3;
 
 const WORKER_FAILURE_MESSAGE =
-  "Worker did not pick up this audit within 5 minutes. Check GitHub Actions (audit-worker workflow) or start a new audit.";
+  "Worker did not pick up this audit within 60 minutes. The cloud worker may be delayed — try again or check GitHub Actions (audit-worker workflow).";
 
 function parseRetryCount(error: string | null | undefined) {
   if (!error) return 0;

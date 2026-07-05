@@ -33,13 +33,13 @@ export function AuditWaitIndicator({
   if (!anchor) return null;
 
   const elapsedMs = now - new Date(anchor).getTime();
-  const queuedTooLong = status === "queued" && elapsedMs >= 5 * 60 * 1000;
+  const queuedTooLong = status === "queued" && elapsedMs >= 45 * 60 * 1000;
 
   return (
     <p className={`text-sm ${queuedTooLong ? "text-amber-300" : "text-zinc-400"}`}>
       {status === "queued" ? "Queued" : "Running"} for {elapsedLabel(elapsedMs)}
       {queuedTooLong
-        ? " — worker is taking longer than usual. It will be marked failed if not picked up soon."
+        ? " — cloud worker can take up to an hour on GitHub Actions. Hang tight."
         : null}
     </p>
   );
