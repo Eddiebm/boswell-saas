@@ -6,6 +6,7 @@ import type { CoachingSections } from "@/lib/coaching/build-coaching";
 import { auditModeLabel } from "@/lib/audit-modes";
 import { AuditPoller } from "@/components/audit-poller";
 import { AuditStatusBadge } from "@/components/audit-status-badge";
+import { AuditWaitIndicator } from "@/components/audit-wait-indicator";
 import { CopyFixPromptButton } from "@/components/copy-fix-prompt-button";
 import { MarkdownViewer } from "@/components/markdown-viewer";
 import { CoachingCard } from "@/components/coaching-card";
@@ -40,7 +41,16 @@ export default async function AuditDetailPage({ params }: Params) {
           <p className="font-medium text-red-300">Audit failed</p>
           <p className="mt-2 text-sm text-zinc-400">{report.error ?? "Unknown error"}</p>
           <p className="mt-2 text-xs text-zinc-500">
-            The cloud worker retries automatically. Start a new audit if this keeps failing.
+            If the worker timed out, start a new audit. Check{" "}
+            <a
+              href="https://github.com/Eddiebm/boswell-saas/actions/workflows/audit-worker.yml"
+              className="underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              GitHub Actions
+            </a>{" "}
+            if this keeps happening.
           </p>
         </Card>
       ) : null}
@@ -48,9 +58,12 @@ export default async function AuditDetailPage({ params }: Params) {
       {isPending ? (
         <Card>
           <p className="text-zinc-300">Audit is {report.status}…</p>
-          <p className="mt-2 text-sm text-zinc-500">
-            The cloud worker usually picks this up within a couple of minutes.
-          </p>
+          <AuditWaitIndicator
+            status={report.status}
+            createdAt={report.createdAt}
+            startedAt={report.startedAt}
+          />
+          <p className="mt-2 text-sm text-zinc-500">This page refreshes automatically every 5 seconds.</p>
         </Card>
       ) : null}
 

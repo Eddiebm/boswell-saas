@@ -14,11 +14,11 @@ describe("plans", () => {
   });
 
   it("gates features by tier", () => {
-    expect(canUsePrAutomation("team")).toBe(true);
-    expect(canUsePrAutomation("pro")).toBe(false);
+    expect(canUsePrAutomation("pro")).toBe(true);
+    expect(canUsePrAutomation("free")).toBe(false);
     expect(canUseLlmBrain("pro")).toBe(true);
     expect(canUseLlmBrain("free")).toBe(false);
-    expect(canUseExecutiveDashboard("business")).toBe(true);
-    expect(canUseExecutiveDashboard("team")).toBe(false);
+    expect(canUseExecutiveDashboard("pro")).toBe(true);
+    expect(canUseExecutiveDashboard("free")).toBe(false);
   });
 });

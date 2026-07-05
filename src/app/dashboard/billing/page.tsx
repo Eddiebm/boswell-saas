@@ -18,18 +18,19 @@ export default async function BillingPage() {
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   const plan = (user?.plan ?? "free") as PlanId;
   const limits = getPlanLimits(plan);
+  const displayPlan = ["team", "business"].includes(plan) ? "pro (legacy)" : limits.name;
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-semibold">Billing</h1>
         <p className="mt-2 text-zinc-400">
-          Current plan: {limits.name} · {user?.auditsUsedThisMonth ?? 0}/{limits.auditsPerMonth}{" "}
+          Current plan: {displayPlan} · {user?.auditsUsedThisMonth ?? 0}/{limits.auditsPerMonth}{" "}
           audits used this month
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2">
         {publicPlanSummary().map((item) => (
           <Card key={item.id} className={item.id === plan ? "border-white/30" : undefined}>
             <h2 className="text-xl font-medium">{item.name}</h2>
@@ -43,13 +44,10 @@ export default async function BillingPage() {
             </ul>
             <div className="mt-6">
               {item.id === "pro" && plan === "free" ? <UpgradeButton plan="pro" /> : null}
-              {item.id === "team" && !["team", "business"].includes(plan) ? (
-                <UpgradeButton plan="team" />
-              ) : null}
-              {item.id === "business" && plan !== "business" ? (
-                <UpgradeButton plan="business" />
-              ) : null}
               {item.id === plan ? <p className="text-sm text-emerald-300">Current plan</p> : null}
+              {item.id === "pro" && ["team", "business"].includes(plan) ? (
+                <p className="text-sm text-emerald-300">Included in your legacy plan</p>
+              ) : null}
             </div>
           </Card>
         ))}

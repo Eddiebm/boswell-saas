@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { PLANS, type PlanId } from "@/lib/plans";
+import { PLANS, PUBLIC_PLAN_IDS, type PlanId } from "@/lib/plans";
 
 export const stripe =
   process.env.STRIPE_SECRET_KEY
@@ -21,5 +21,5 @@ export function planFromStripePrice(priceId: string | null | undefined): PlanId 
 }
 
 export function publicPlanSummary() {
-  return Object.values(PLANS);
+  return PUBLIC_PLAN_IDS.map((id) => PLANS[id]);
 }

@@ -265,6 +265,8 @@ export type AuditReportView = {
   id: string;
   status: string;
   error?: string | null;
+  createdAt?: Date | null;
+  startedAt?: Date | null;
   repoFullName: string;
   auditMode: AuditMode;
   costUsd?: string | null;
@@ -433,6 +435,8 @@ export async function getAuditReport(userId: string, auditId: string): Promise<A
     id: auditId,
     status: run.status,
     error: run.error,
+    createdAt: run.createdAt,
+    startedAt: run.startedAt,
     repoFullName: repo.fullName,
     auditMode: normalizeAuditMode(run.auditMode),
     costUsd: run.costUsd,
@@ -467,7 +471,7 @@ export async function askBrain(userId: string, question: string, repoId?: string
       authPath: "src/middleware.ts",
       billingNote: "Stripe billing lives in the SaaS dashboard.",
     });
-    return result;
+    return { ...result, source: "demo" as const };
   }
 
   const targetRepoId = repoId ?? (await getPrimaryRepoId(userId));
@@ -475,12 +479,13 @@ export async function askBrain(userId: string, question: string, repoId?: string
     return {
       answer: "Sync a GitHub repository first, then run an audit.",
       evidence: [],
+      source: "template" as const,
     };
   }
 
   const repo = await getRepository(userId, targetRepoId);
   if (!repo) {
-    return { answer: "Repository not found.", evidence: [] };
+    return { answer: "Repository not found.", evidence: [], source: "template" as const };
   }
 
   const score = (await getRepoScore(targetRepoId)) ?? demoScore;
@@ -535,8 +540,9 @@ export async function askBrain(userId: string, question: string, repoId?: string
     ? {
         answer: llm.answer,
         evidence: [...templateResult.evidence, `Model: ${llm.model}`],
+        source: "llm" as const,
       }
-    : templateResult;
+    : { ...templateResult, source: "template" as const };
 
   const [qRow] = await db
     .insert(repoQuestions)

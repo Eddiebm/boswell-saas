@@ -5,7 +5,7 @@ export const PLANS = {
     priceMonthly: 0,
     auditsPerMonth: 3,
     maxRepos: 2,
-    features: ["3 audits / month", "2 connected repos", "Security + handoff reports"],
+    features: ["3 audits / month", "2 connected repos", "Health score + fix prompt"],
   },
   pro: {
     id: "pro",
@@ -16,7 +16,9 @@ export const PLANS = {
     features: [
       "50 audits / month",
       "25 connected repos",
-      "Scheduled re-audits",
+      "LLM Engineering Brain Q&A",
+      "Safe-fix PR automation",
+      "Executive summary + fix queue",
       "Priority worker queue",
     ],
   },
@@ -26,13 +28,8 @@ export const PLANS = {
     priceMonthly: 99,
     auditsPerMonth: 200,
     maxRepos: 100,
-    features: [
-      "200 audits / month",
-      "100 connected repos",
-      "Scheduled audits",
-      "PR automation",
-      "Engineering memory + Q&A",
-    ],
+    features: ["Legacy plan — same as Pro"],
+    hidden: true,
   },
   business: {
     id: "business",
@@ -40,17 +37,14 @@ export const PLANS = {
     priceMonthly: 299,
     auditsPerMonth: 1000,
     maxRepos: 500,
-    features: [
-      "Unlimited-scale audits",
-      "Executive dashboard",
-      "Advanced reports",
-      "Priority support",
-      "Custom safe-fix policies",
-    ],
+    features: ["Legacy plan — same as Pro"],
+    hidden: true,
   },
 } as const;
 
 export type PlanId = keyof typeof PLANS;
+
+export const PUBLIC_PLAN_IDS: PlanId[] = ["free", "pro"];
 
 export function getPlanLimits(plan: PlanId) {
   return PLANS[plan];
@@ -73,7 +67,7 @@ export function planMeetsMinimum(current: PlanId, required: PlanId): boolean {
 }
 
 export function canUsePrAutomation(plan: PlanId): boolean {
-  return planMeetsMinimum(plan, "team");
+  return planMeetsMinimum(plan, "pro");
 }
 
 export function canUseLlmBrain(plan: PlanId): boolean {
@@ -81,5 +75,5 @@ export function canUseLlmBrain(plan: PlanId): boolean {
 }
 
 export function canUseExecutiveDashboard(plan: PlanId): boolean {
-  return planMeetsMinimum(plan, "business");
+  return planMeetsMinimum(plan, "pro");
 }

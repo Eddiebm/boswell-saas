@@ -41,6 +41,8 @@ export async function listAuditsForUser(userId: string) {
       costUsd: auditRuns.costUsd,
       auditMode: auditRuns.auditMode,
       createdAt: auditRuns.createdAt,
+      startedAt: auditRuns.startedAt,
+      error: auditRuns.error,
       finishedAt: auditRuns.finishedAt,
       repoFullName: repositories.fullName,
       repositoryId: repositories.id,
@@ -166,15 +168,68 @@ export async function claimNextQueuedAudit() {
   return updated ?? null;
 }
 
-const STUCK_AUDIT_MS = 35 * 60 * 1000;
+const QUEUED_TIMEOUT_MS = 5 * 60 * 1000;
+const RUNNING_TIMEOUT_MS = 25 * 60 * 1000;
+const MAX_AUDIT_RETRIES = 3;
 
-export async function recoverStuckAudits() {
+const WORKER_FAILURE_MESSAGE =
+  "Worker did not pick up this audit within 5 minutes. Check GitHub Actions (audit-worker workflow) or start a new audit.";
+
+function parseRetryCount(error: string | null | undefined) {
+  if (!error) return 0;
+  const match = error.match(/\[retry:(\d+)\]/);
+  return match ? Number(match[1]) : 0;
+}
+
+export async function recoverStaleAudits() {
   const db = requireDb();
-  const cutoff = new Date(Date.now() - STUCK_AUDIT_MS);
+  const now = Date.now();
+  const queuedCutoff = new Date(now - QUEUED_TIMEOUT_MS);
+
   await db
     .update(auditRuns)
-    .set({ status: "queued", startedAt: null, error: "Requeued after worker timeout" })
-    .where(and(eq(auditRuns.status, "running"), lt(auditRuns.startedAt, cutoff)));
+    .set({
+      status: "failed",
+      finishedAt: new Date(),
+      error: WORKER_FAILURE_MESSAGE,
+    })
+    .where(and(eq(auditRuns.status, "queued"), lt(auditRuns.createdAt, queuedCutoff)));
+
+  const runningCutoff = new Date(now - RUNNING_TIMEOUT_MS);
+  const stuckRunning = await db
+    .select()
+    .from(auditRuns)
+    .where(and(eq(auditRuns.status, "running"), lt(auditRuns.startedAt, runningCutoff)));
+
+  for (const run of stuckRunning) {
+    const retries = parseRetryCount(run.error);
+    if (retries >= MAX_AUDIT_RETRIES) {
+      await db
+        .update(auditRuns)
+        .set({
+          status: "failed",
+          finishedAt: new Date(),
+          error: `Audit exceeded maximum retries (${MAX_AUDIT_RETRIES}). Last attempt timed out after 25 minutes.`,
+        })
+        .where(eq(auditRuns.id, run.id));
+      continue;
+    }
+
+    const nextRetry = retries + 1;
+    await db
+      .update(auditRuns)
+      .set({
+        status: "queued",
+        startedAt: null,
+        error: `[retry:${nextRetry}] Requeued after worker timeout (attempt ${nextRetry} of ${MAX_AUDIT_RETRIES})`,
+      })
+      .where(eq(auditRuns.id, run.id));
+  }
+}
+
+/** @deprecated use recoverStaleAudits */
+export async function recoverStuckAudits() {
+  await recoverStaleAudits();
 }
 
 export async function runQueuedAudit(auditId: string) {
@@ -496,7 +551,7 @@ export async function processWorkerTick() {
     };
   }
 
-  await recoverStuckAudits();
+  await recoverStaleAudits();
   const claimed = await claimNextQueuedAudit();
   if (!claimed) {
     return { processed: false };

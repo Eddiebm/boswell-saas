@@ -12,7 +12,7 @@ export function getEnvChecks(): EnvCheck[] {
     {
       name: "Mode",
       status: demo ? "demo" : "ok",
-      detail: demo ? "Demo mode (BOSWELL_DEMO or no DATABASE_URL)" : "Live mode",
+      detail: demo ? "Demo mode (BOSWELL_DEMO=1)" : "Live mode",
     },
     {
       name: "Database",

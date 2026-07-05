@@ -4,6 +4,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { listAuditsForUser } from "@/lib/audits";
 import { AuditStatusBadge } from "@/components/audit-status-badge";
+import { AuditWaitIndicator } from "@/components/audit-wait-indicator";
 import { Button, Card } from "@/components/ui";
 
 export default async function AuditsPage() {
@@ -37,6 +38,14 @@ export default async function AuditsPage() {
                   {audit.deployVerdict ?? audit.summary ?? "Audit run"}
                   {audit.costUsd ? ` · ~$${Number(audit.costUsd).toFixed(2)}` : ""}
                 </p>
+                <AuditWaitIndicator
+                  status={audit.status}
+                  createdAt={audit.createdAt}
+                  startedAt={audit.startedAt}
+                />
+                {audit.status === "failed" && audit.error ? (
+                  <p className="mt-1 text-sm text-red-300">{audit.error}</p>
+                ) : null}
               </div>
               <div className="flex items-center gap-3">
                 <AuditStatusBadge status={audit.status} />

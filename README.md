@@ -6,20 +6,18 @@ Boswell watches your repositories, understands what changed, remembers engineeri
 
 | Feature | Status |
 |---------|--------|
-| Daily CTO Briefing | **Demo + live** (after audit) |
+| Repo audit + fix prompt | **Live** |
 | Health score 0–1000 (9 dimensions) | **Deterministic engine** |
 | AI Slop Score | **Deterministic scanner** |
-| Engineering Memory | **Demo + DB-backed events** |
+| Audit modes (quick / standard / deep) | **Live** |
 | Fix Queue prioritization | **Implemented** |
 | Good / bad / dangerous / evil classification | **Implemented** |
-| Safe automation (green/yellow/red) | **Implemented** |
-| Structured audit reports (JSON + markdown) | **Implemented** |
-| Evidence-backed Brain Q&A | **Demo + API** |
-| Business billing tier | **Placeholder** |
-| Coaching sections per finding | **Implemented** |
-| PR mode (no push to main) | **API stub + policy** |
-| GitHub OAuth + audits | **Requires env** |
-| Stripe billing | **Requires env** |
+| Engineering Memory | **DB-backed** (after audit) |
+| Engineering Brain Q&A | **Templates on Free, LLM on Pro** |
+| Safe-fix PR creation | **Live on Pro** (GitHub branch PR) |
+| GitHub OAuth + audits | **Live** (requires env) |
+| Stripe billing | **Free + Pro** (requires env) |
+| Demo mode | **Explicit only** (`BOSWELL_DEMO=1`) |
 
 ## Deployed
 
@@ -39,7 +37,7 @@ npm run dev
 
 Open http://localhost:3000 → **Open demo dashboard**
 
-Demo mode activates when `BOSWELL_DEMO=1` or `DATABASE_URL` is unset.
+Demo mode activates when `BOSWELL_DEMO=1`. Without `DATABASE_URL`, live mode will error — it does not silently fall back to demo.
 
 ## Full local setup (live audits)
 

@@ -28,9 +28,9 @@ export default async function ExecutivePage() {
       <Card className="space-y-4">
         <h1 className="text-2xl font-semibold">Executive dashboard</h1>
         <p className="text-sm text-zinc-400">
-          Founder-friendly summaries and debt estimates are available on the Business plan.
+          Founder-friendly summaries and debt estimates are available on the Pro plan.
         </p>
-        <UpgradeButton plan="business" />
+        <UpgradeButton plan="pro" />
         <p className="text-xs text-zinc-600">
           Or use the <Link href="/dashboard" className="underline">Daily Briefing</Link> on any plan.
         </p>

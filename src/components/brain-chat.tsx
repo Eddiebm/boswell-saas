@@ -1,12 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui";
+import { Badge, Button } from "@/components/ui";
 
 type BrainResponse = {
   answer: string;
   evidence: string[];
+  source?: "llm" | "template" | "demo";
 };
+
+function sourceLabel(source: BrainResponse["source"]) {
+  if (source === "llm") return { tone: "good" as const, text: "LLM answer" };
+  if (source === "demo") return { tone: "warn" as const, text: "Demo data" };
+  return { tone: "neutral" as const, text: "Template answer" };
+}
 
 export function BrainChat({ repositoryId }: { repositoryId: string | null }) {
   const [question, setQuestion] = useState("");
@@ -37,6 +44,8 @@ export function BrainChat({ repositoryId }: { repositoryId: string | null }) {
     setResponse(data);
     setLoading(false);
   }
+
+  const source = response ? sourceLabel(response.source) : null;
 
   return (
     <div className="space-y-4">
@@ -71,6 +80,9 @@ export function BrainChat({ repositoryId }: { repositoryId: string | null }) {
       </form>
       {response ? (
         <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+          {source ? (
+            <Badge tone={source.tone}>{source.text}</Badge>
+          ) : null}
           <p className="text-sm leading-7 text-zinc-300">{response.answer}</p>
           {response.evidence?.length ? (
             <div>

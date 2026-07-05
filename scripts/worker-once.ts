@@ -1,7 +1,7 @@
-import { processWorkerTick, recoverStuckAudits } from "../src/lib/audits";
+import { processWorkerTick, recoverStaleAudits } from "../src/lib/audits";
 
 async function main() {
-  await recoverStuckAudits();
+  await recoverStaleAudits();
   const result = await processWorkerTick();
   if (result.processed && "auditId" in result) {
     console.log(
