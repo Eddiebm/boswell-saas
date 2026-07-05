@@ -18,6 +18,7 @@
     "deploy:worker": "bash scripts/deploy-cloud-worker.sh",
     "setup:github-oauth": "node scripts/setup-github-oauth.mjs",
     "setup:openrouter-key": "node scripts/setup-openrouter-key.mjs",
+    "setup:alerts": "node scripts/setup-alerts.mjs",
     "smoke:prod": "node scripts/smoke-test-production.mjs"
   },
   "dependencies": {

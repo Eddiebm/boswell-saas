@@ -54,4 +54,8 @@ setSecret(
   env.BOSWELL_ENGINE_GIT_URL || "git+https://github.com/Eddiebm/boswell.git",
 );
 
+setSecret("ADMIN_ALERT_EMAIL", env.ADMIN_ALERT_EMAIL);
+setSecret("RESEND_API_KEY", env.RESEND_API_KEY);
+setSecret("ALERT_FROM_EMAIL", env.ALERT_FROM_EMAIL || "Boswell <onboarding@resend.dev>");
+
 execFileSync("gh", ["workflow", "run", "audit-worker.yml", "--repo", repo], { stdio: "inherit" });
