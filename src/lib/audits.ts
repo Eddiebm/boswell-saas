@@ -28,6 +28,7 @@ import type { AuditMode } from "@/lib/audit-modes";
 import { normalizeAuditMode } from "@/lib/audit-modes";
 import { generateAuditReport, reportToMarkdown } from "@/lib/reports/generate-report";
 import { processAuditJob } from "@/lib/worker/process-audit";
+import { sendAuditAlert } from "@/lib/alerts/audit-alerts";
 
 export async function listAuditsForUser(userId: string) {
   const db = requireDb();
@@ -186,32 +187,63 @@ export async function recoverStaleAudits() {
   const now = Date.now();
   const queuedCutoff = new Date(now - QUEUED_TIMEOUT_MS);
 
-  await db
-    .update(auditRuns)
-    .set({
-      status: "failed",
-      finishedAt: new Date(),
-      error: WORKER_FAILURE_MESSAGE,
+  const staleQueued = await db
+    .select({
+      id: auditRuns.id,
+      repoFullName: repositories.fullName,
     })
+    .from(auditRuns)
+    .innerJoin(repositories, eq(auditRuns.repositoryId, repositories.id))
     .where(and(eq(auditRuns.status, "queued"), lt(auditRuns.createdAt, queuedCutoff)));
+
+  for (const run of staleQueued) {
+    await db
+      .update(auditRuns)
+      .set({
+        status: "failed",
+        finishedAt: new Date(),
+        error: WORKER_FAILURE_MESSAGE,
+      })
+      .where(eq(auditRuns.id, run.id));
+
+    await sendAuditAlert({
+      auditId: run.id,
+      repoFullName: run.repoFullName,
+      reason: WORKER_FAILURE_MESSAGE,
+      status: "stale_queued",
+    });
+  }
 
   const runningCutoff = new Date(now - RUNNING_TIMEOUT_MS);
   const stuckRunning = await db
-    .select()
+    .select({
+      id: auditRuns.id,
+      error: auditRuns.error,
+      repoFullName: repositories.fullName,
+    })
     .from(auditRuns)
+    .innerJoin(repositories, eq(auditRuns.repositoryId, repositories.id))
     .where(and(eq(auditRuns.status, "running"), lt(auditRuns.startedAt, runningCutoff)));
 
   for (const run of stuckRunning) {
     const retries = parseRetryCount(run.error);
     if (retries >= MAX_AUDIT_RETRIES) {
+      const error = `Audit exceeded maximum retries (${MAX_AUDIT_RETRIES}). Last attempt timed out after 25 minutes.`;
       await db
         .update(auditRuns)
         .set({
           status: "failed",
           finishedAt: new Date(),
-          error: `Audit exceeded maximum retries (${MAX_AUDIT_RETRIES}). Last attempt timed out after 25 minutes.`,
+          error,
         })
         .where(eq(auditRuns.id, run.id));
+
+      await sendAuditAlert({
+        auditId: run.id,
+        repoFullName: run.repoFullName,
+        reason: error,
+        status: "max_retries",
+      });
       continue;
     }
 
@@ -516,6 +548,14 @@ export async function runQueuedAudit(auditId: string) {
         error: message,
       })
       .where(eq(auditRuns.id, run.id));
+
+    await sendAuditAlert({
+      auditId: run.id,
+      repoFullName: repo.fullName,
+      reason: message,
+      status: "failed",
+    });
+
     return { ok: false as const, error: message };
   }
 }

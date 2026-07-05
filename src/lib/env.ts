@@ -59,5 +59,22 @@ export function getEnvChecks(): EnvCheck[] {
       status: "ok",
       detail: "GitHub Actions runs audit-worker.yml every 2 minutes (cloud)",
     },
+    {
+      name: "Failure alerts",
+      status:
+        process.env.ADMIN_ALERT_EMAIL && process.env.RESEND_API_KEY ? "ok" : "manual",
+      detail:
+        process.env.ADMIN_ALERT_EMAIL && process.env.RESEND_API_KEY
+          ? `Email alerts → ${process.env.ADMIN_ALERT_EMAIL}`
+          : "Set ADMIN_ALERT_EMAIL + RESEND_API_KEY for audit failure emails",
+    },
+    {
+      name: "Stripe",
+      status: process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_PRO ? "ok" : "manual",
+      detail:
+        process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_PRO
+          ? "Stripe configured for Pro upgrades"
+          : "Set STRIPE_SECRET_KEY + STRIPE_PRICE_PRO for paid plans",
+    },
   ];
 }

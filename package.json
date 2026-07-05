@@ -17,7 +17,8 @@
     "worker:once": "tsx scripts/worker-once.ts",
     "deploy:worker": "bash scripts/deploy-cloud-worker.sh",
     "setup:github-oauth": "node scripts/setup-github-oauth.mjs",
-    "setup:openrouter-key": "node scripts/setup-openrouter-key.mjs"
+    "setup:openrouter-key": "node scripts/setup-openrouter-key.mjs",
+    "smoke:prod": "node scripts/smoke-test-production.mjs"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.2",
