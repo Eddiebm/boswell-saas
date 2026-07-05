@@ -7,6 +7,7 @@ import { auditModeLabel } from "@/lib/audit-modes";
 import { AuditPoller } from "@/components/audit-poller";
 import { AuditStatusBadge } from "@/components/audit-status-badge";
 import { AuditWaitIndicator } from "@/components/audit-wait-indicator";
+import { OwaspTop10Card } from "@/components/owasp-top10-card";
 import { CopyFixPromptButton } from "@/components/copy-fix-prompt-button";
 import { MarkdownViewer } from "@/components/markdown-viewer";
 import { CoachingCard } from "@/components/coaching-card";
@@ -117,6 +118,8 @@ export default async function AuditDetailPage({ params }: Params) {
             </Card>
           </section>
 
+          <OwaspTop10Card summary={report.owaspSummary} />
+
           <section className="grid gap-4 lg:grid-cols-3">
             <PriorityCard title="Fix now" items={report.priorityGroups.fixNow} tone="bad" />
             <PriorityCard title="Fix next" items={report.priorityGroups.fixNext} tone="warn" />
@@ -141,6 +144,7 @@ export default async function AuditDetailPage({ params }: Params) {
                   <ClassificationBadge classification={f.classification} />
                   <AutoFixBadge level={f.autoFixLevel} />
                   <Badge tone="neutral">{f.severity}</Badge>
+                  {f.owaspCode ? <Badge tone="warn">{f.owaspCode}</Badge> : null}
                 </div>
                 <CoachingCard title={f.title} coaching={f.coaching as CoachingSections} showEli5 />
               </div>

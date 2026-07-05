@@ -2,6 +2,7 @@ import type { FindingClassification } from "@/lib/classification/classify";
 import type { DailyBriefing } from "@/lib/briefing/build-briefing";
 import type { CoachingSections } from "@/lib/coaching/build-coaching";
 import { groupByPriority, prioritizeFindings } from "@/lib/reports/prioritize-findings";
+import { buildOwaspTop10Summary, owaspTop10ToMarkdown } from "@/lib/reports/owasp-top10";
 
 type FixPromptFinding = {
   id: string;
@@ -9,6 +10,7 @@ type FixPromptFinding = {
   description: string;
   severity: string;
   classification: FindingClassification;
+  category?: string;
   filePath?: string;
   coaching?: CoachingSections | null;
 };
@@ -50,6 +52,8 @@ export function buildFixPrompt(input: FixPromptInput): string {
     .filter(Boolean)
     .join("\n\n");
 
+  const owaspBlock = owaspTop10ToMarkdown(buildOwaspTop10Summary(input.findings));
+
   return `You are my senior engineer helping me fix issues found in a Boswell audit.
 
 ## Your job
@@ -77,6 +81,8 @@ ${input.consumerSummary.trim()}
 
 ## Executive summary
 ${input.briefing.executiveSummary.trim()}
+
+${owaspBlock}
 
 ## Prioritized findings
 ${findingsBlock || "No findings recorded."}

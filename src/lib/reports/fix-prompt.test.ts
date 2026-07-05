@@ -46,6 +46,6 @@ describe("buildFixPrompt", () => {
     expect(prompt).toContain("Fix now");
     expect(prompt).toContain("Broken payment handoff");
     expect(prompt).toContain("Phase 1");
-    expect(prompt).toContain("$0.32");
+    expect(prompt).toContain("OWASP Top 10:2021");
   });
 });

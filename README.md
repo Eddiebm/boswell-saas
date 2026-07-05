@@ -7,6 +7,7 @@ Boswell watches your repositories, understands what changed, remembers engineeri
 | Feature | Status |
 |---------|--------|
 | Repo audit + fix prompt | **Live** |
+| OWASP Top 10:2021 mapping | **Heuristic** (per-finding, on reports) |
 | Health score 0–1000 (9 dimensions) | **Deterministic engine** |
 | AI Slop Score | **Deterministic scanner** |
 | Audit modes (quick / standard / deep) | **Live** |
