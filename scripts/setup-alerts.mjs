@@ -55,7 +55,7 @@ if (resendKey) {
 }
 
 console.log("Pushing env to Vercel...");
-execSync("bash scripts/push-vercel-env-api.sh", { cwd: root, stdio: "inherit" });
+execSync("bash scripts/push-vercel-env-api.sh production .env.local", { cwd: root, stdio: "inherit" });
 
 if (resendKey) {
   console.log("Pushing secrets to GitHub Actions...");

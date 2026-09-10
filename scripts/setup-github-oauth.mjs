@@ -163,9 +163,9 @@ async function main() {
 
         console.log("\nPushing to Vercel…");
         try {
-          execSync("bash scripts/push-vercel-env-api.sh", { cwd: root, stdio: "inherit" });
+          execSync("bash scripts/push-vercel-env-api.sh production .env.local", { cwd: root, stdio: "inherit" });
         } catch {
-          console.warn("Vercel push failed — run: bash scripts/push-vercel-env-api.sh");
+          console.warn("Vercel push failed — run: bash scripts/push-vercel-env-api.sh production .env.local");
         }
 
         server.close();

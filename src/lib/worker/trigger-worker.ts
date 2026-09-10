@@ -3,7 +3,6 @@ const GITHUB_API = "https://api.github.com";
 export async function triggerAuditWorkerDispatch(): Promise<{ ok: boolean; reason?: string }> {
   const token =
     process.env.GITHUB_WORKFLOW_TOKEN ??
-    process.env.GITHUB_BOOTSTRAP_TOKEN ??
     process.env.GITHUB_TOKEN;
   const repo = process.env.GITHUB_WORKER_REPO ?? "Eddiebm/boswell-saas";
 

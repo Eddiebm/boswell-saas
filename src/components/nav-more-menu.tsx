@@ -14,10 +14,6 @@ export function NavMoreMenu({ links }: { links: Array<{ href: string; label: str
   const activeInMenu = links.some((link) => pathname.startsWith(link.href));
 
   useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
     function onClick(event: MouseEvent) {
       if (ref.current && !ref.current.contains(event.target as Node)) {
         setOpen(false);
@@ -46,6 +42,7 @@ export function NavMoreMenu({ links }: { links: Array<{ href: string; label: str
             <Link
               key={link.href}
               href={link.href}
+              onClick={() => setOpen(false)}
               className={cn(
                 "block px-4 py-2.5 text-sm transition hover:bg-zinc-900",
                 pathname.startsWith(link.href) ? "text-white" : "text-zinc-400",

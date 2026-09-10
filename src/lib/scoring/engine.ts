@@ -12,12 +12,12 @@ function clamp(n: number) {
 }
 
 function securityScore(input: ScoreInput): number {
-  let penalty = input.criticalFindings * 200 + input.highFindings * 80 + input.mediumFindings * 25;
+  const penalty = input.criticalFindings * 200 + input.highFindings * 80 + input.mediumFindings * 25;
   return clamp(1000 - penalty);
 }
 
 function architectureScore(input: ScoreInput): number {
-  let penalty = input.giantFiles * 40 + input.circularDeps * 120;
+  const penalty = input.giantFiles * 40 + input.circularDeps * 120;
   return clamp(1000 - penalty);
 }
 

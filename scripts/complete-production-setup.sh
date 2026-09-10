@@ -45,7 +45,7 @@ fi
 
 echo ""
 echo "Pushing env to Vercel..."
-./scripts/push-vercel-env.sh
+./scripts/push-vercel-env.sh production .env.local
 
 echo ""
 echo "=== Render worker (audits) ==="

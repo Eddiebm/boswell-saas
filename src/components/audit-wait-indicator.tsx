@@ -19,7 +19,7 @@ export function AuditWaitIndicator({
   createdAt?: string | Date | null;
   startedAt?: string | Date | null;
 }) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(0);
 
   useEffect(() => {
     if (status !== "queued" && status !== "running") return;

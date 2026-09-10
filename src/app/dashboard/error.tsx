@@ -12,7 +12,10 @@ export default function DashboardError({
   return (
     <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-8">
       <h2 className="text-lg font-medium text-red-200">Something went wrong</h2>
-      <p className="mt-2 text-sm text-zinc-400">{error.message}</p>
+      <p className="mt-2 text-sm text-zinc-400">
+        We could not complete that request. Please try again. If the problem continues,
+        contact support with reference {error.digest ?? "unavailable"}.
+      </p>
       <div className="mt-4">
         <Button onClick={reset} variant="secondary">
           Try again
