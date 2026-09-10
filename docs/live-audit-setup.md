@@ -25,7 +25,7 @@ npm run db:push
 ## 3. GitHub OAuth app
 
 - Callback URL: `http://localhost:3000/api/auth/callback/github`
-- Scopes: `read:user`, `user:email`, `repo` (configured in auth)
+- OAuth scopes: `read:user`, `user:email`. This foundation release audits public repositories only; private-repository access will move to a least-privilege GitHub App installation.
 
 ## 4. Start web (live mode)
 

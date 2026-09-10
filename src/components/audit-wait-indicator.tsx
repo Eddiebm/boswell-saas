@@ -19,7 +19,7 @@ export function AuditWaitIndicator({
   createdAt?: string | Date | null;
   startedAt?: string | Date | null;
 }) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
     if (status !== "queued" && status !== "running") return;
@@ -31,6 +31,10 @@ export function AuditWaitIndicator({
 
   const anchor = status === "running" && startedAt ? startedAt : createdAt;
   if (!anchor) return null;
+
+  if (now === null) {
+    return <p className="text-sm text-zinc-400">{status === "queued" ? "Queued" : "Running"}</p>;
+  }
 
   const elapsedMs = now - new Date(anchor).getTime();
   const queuedTooLong = status === "queued" && elapsedMs >= 45 * 60 * 1000;

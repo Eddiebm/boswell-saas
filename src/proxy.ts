@@ -2,7 +2,7 @@ import { isDemoMode } from "@/lib/demo/mode";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export default async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   if (isDemoMode()) {
     return NextResponse.next();
   }

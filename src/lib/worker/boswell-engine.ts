@@ -11,7 +11,7 @@ function pythonBin() {
 }
 
 function runPython(args: string[], env: NodeJS.ProcessEnv, timeoutMs?: number) {
-  return spawnSync(pythonBin(), args, {
+  return spawnSync(/* turbopackIgnore: true */ pythonBin(), args, {
     encoding: "utf8",
     env,
     timeout: timeoutMs,

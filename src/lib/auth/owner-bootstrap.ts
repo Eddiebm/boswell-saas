@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { requireDb } from "@/lib/db";
 import { accounts, sessions, users } from "@/lib/db/schema";
 import { cookies } from "next/headers";
+import { encryptToken } from "@/lib/security/token-crypto";
 
 type GithubUser = {
   id: number;
@@ -52,7 +53,7 @@ export async function signInOwner() {
 
   const providerAccountId = String(gh.id);
   const [existingAccount] = await db
-    .select()
+    .select({ providerAccountId: accounts.providerAccountId })
     .from(accounts)
     .where(and(eq(accounts.provider, "github"), eq(accounts.providerAccountId, providerAccountId)))
     .limit(1);
@@ -60,7 +61,7 @@ export async function signInOwner() {
   if (existingAccount) {
     await db
       .update(accounts)
-      .set({ access_token: bootstrapToken, userId: user.id })
+      .set({ access_token: encryptToken(bootstrapToken), userId: user.id })
       .where(
         and(
           eq(accounts.provider, "github"),
@@ -73,9 +74,9 @@ export async function signInOwner() {
       type: "oauth",
       provider: "github",
       providerAccountId,
-      access_token: bootstrapToken,
+      access_token: encryptToken(bootstrapToken),
       token_type: "bearer",
-      scope: "read:user user:email repo",
+      scope: "read:user user:email",
     });
   }
 

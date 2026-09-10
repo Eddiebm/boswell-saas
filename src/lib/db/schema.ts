@@ -53,6 +53,12 @@ export const workerJobStatusEnum = pgEnum("worker_job_status", [
   "failed",
 ]);
 
+export const rateLimitBuckets = pgTable("rate_limit_buckets", {
+  keyHash: text("key_hash").primaryKey(),
+  count: integer("count").default(0).notNull(),
+  resetAt: timestamp("reset_at", { mode: "date" }).notNull(),
+});
+
 export const fixQueueStatusEnum = pgEnum("fix_queue_status", [
   "pending",
   "in_progress",

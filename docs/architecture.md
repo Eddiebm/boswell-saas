@@ -42,6 +42,6 @@ When `BOSWELL_DEMO=1` or `DATABASE_URL` is unset, all data comes from `src/lib/d
 ## Security
 
 - No push to main
-- Tokens encrypted at rest (Neon)
+- Provider tokens encrypted in the application with AES-256-GCM; database storage never receives plaintext
 - Worker endpoint protected by `WORKER_SECRET`
 - Auth via NextAuth GitHub OAuth

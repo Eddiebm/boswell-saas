@@ -39,7 +39,7 @@ export async function createSafeFixPullRequest(input: CreatePrInput): Promise<Cr
   });
 
   const proposalMarkdown = [
-    `# Boswell safe-fix proposal`,
+    `# Boswell fix proposal`,
     ``,
     `**Finding:** ${input.title}`,
     ``,
@@ -73,7 +73,7 @@ export async function createSafeFixPullRequest(input: CreatePrInput): Promise<Cr
     `Proposal file: \`${proposalPath}\``,
     ``,
     `---`,
-    `*Opened by [Boswell](https://boswell-saas.vercel.app) — safe automation (green tier). Never auto-merged.*`,
+    `*Opened by [Boswell](https://boswell-saas.vercel.app) as a review-only proposal. It does not apply code changes and is never auto-merged.*`,
   ].join("\n");
 
   const { data: pr } = await octokit.rest.pulls.create({
