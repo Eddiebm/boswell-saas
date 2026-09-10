@@ -8,8 +8,15 @@ AUTH_FILE="${HOME}/Library/Application Support/com.vercel.cli/auth.json"
 PROJECT_ID="prj_SOwP5saiF2YFESAd0CjLWzqgfJ0Z"
 TEAM_ID="team_xEdbPPlzZmOVGOxap6gPbbW2"
 
-if [[ ! -f .env.local ]]; then
-  echo "Missing .env.local"
+target="${1:-}"
+if [[ ! "$target" =~ ^(production|preview|development)$ ]]; then
+  echo "Usage: $0 production|preview|development [env-file]"
+  exit 1
+fi
+
+env_file="${2:-.env.${target}.local}"
+if [[ ! -f "$env_file" ]]; then
+  echo "Missing $env_file — each deployment target requires separate credentials"
   exit 1
 fi
 
@@ -22,7 +29,7 @@ TOKEN=$(python3 -c "import json; print(json.load(open('$AUTH_FILE'))['token'])")
 
 set -a
 # shellcheck disable=SC1091
-source .env.local
+source "$env_file"
 set +a
 
 upsert_env() {
@@ -43,13 +50,13 @@ upsert_env() {
   echo "Set $key ($target)"
 }
 
-for target in production preview development; do
-  for key in DATABASE_URL AUTH_SECRET AUTH_URL AUTH_GITHUB_ID AUTH_GITHUB_SECRET WORKER_SECRET OPENROUTER_API_KEY OPENROUTER_MODEL BOSWELL_ENGINE_GIT_URL ADMIN_ALERT_EMAIL RESEND_API_KEY ALERT_FROM_EMAIL; do
-    upsert_env "$key" "${!key:-}" "$target"
-  done
+for key in DATABASE_URL AUTH_SECRET AUTH_URL AUTH_GITHUB_ID AUTH_GITHUB_SECRET WORKER_SECRET OPENROUTER_API_KEY OPENROUTER_MODEL BOSWELL_ENGINE_GIT_URL GITHUB_WORKFLOW_TOKEN ADMIN_ALERT_EMAIL RESEND_API_KEY ALERT_FROM_EMAIL; do
+  upsert_env "$key" "${!key:-}" "$target"
 done
 
 echo "Redeploying..."
-cd "$(dirname "$0")/.." && vercel --prod --yes 2>/dev/null || echo "Redeploy manually: vercel --prod"
+if [[ "$target" == "production" ]]; then
+  cd "$(dirname "$0")/.." && vercel --prod --yes 2>/dev/null || echo "Redeploy manually: vercel --prod"
+fi
 
 echo "Done."
