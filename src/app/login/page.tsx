@@ -37,7 +37,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </form>
         ) : null}
 
-        {!hasBootstrap && !hasOAuth ? (
+        {!hasOAuth ? (
           <p className="mt-8 text-sm text-red-400">Sign-in is not configured yet.</p>
         ) : null}
       </Card>
