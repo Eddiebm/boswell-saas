@@ -23,6 +23,7 @@ Or paste variables manually at [Vercel env settings](https://vercel.com/eddiebms
 | `AUTH_URL` | Yes — your production URL, e.g. `https://boswell-saas.vercel.app` |
 | `AUTH_GITHUB_ID` | Yes |
 | `AUTH_GITHUB_SECRET` | Yes |
+| `TOKEN_ENCRYPTION_KEY` | Yes (`openssl rand -base64 32`) |
 | `WORKER_SECRET` | Yes (random string) |
 
 Optional on Vercel: `OPENROUTER_API_KEY` (enables Pro+ LLM answers in Engineering Brain), `STRIPE_*` (billing).
@@ -33,6 +34,14 @@ On the **worker** (required for live audits): `OPENROUTER_API_KEY`, `BOSWELL_ENG
 `https://YOUR_VERCEL_DOMAIN/api/auth/callback/github`
 
 Then run `npm run db:push` locally against the same Neon DB.
+
+Before deploying this release, back up Neon and encrypt any legacy provider tokens:
+
+```bash
+CONFIRM_TOKEN_MIGRATION=1 npm run migrate:tokens
+```
+
+Existing GitHub users must reconnect so the reduced `read:user user:email` scope takes effect. This foundation release audits public repositories only; private-repository support requires the planned least-privilege GitHub App installation flow.
 
 ## Audit worker (cloud)
 
@@ -52,5 +61,5 @@ Optional: Render worker via Blueprint (`render.yaml`) if you prefer a always-on 
 - Sign in at `/login` → **Continue as owner** (or GitHub OAuth when configured)
 - `/dashboard/admin` shows env checks green
 - Run audit → status moves off `queued` within ~2 min (GitHub Actions worker)
-- Team plan: safe-fix PR opens a branch + proposal file (never pushes to main)
+- Team plan: fix-proposal PR opens a branch + review document (it does not repair source code and never pushes to main)
 - Business plan: executive dashboard unlocked

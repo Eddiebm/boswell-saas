@@ -15,7 +15,7 @@ Boswell watches your repositories, understands what changed, remembers engineeri
 | Good / bad / dangerous / evil classification | **Implemented** |
 | Engineering Memory | **DB-backed** (after audit) |
 | Engineering Brain Q&A | **Templates on Free, LLM on Pro** |
-| Safe-fix PR creation | **Live on Pro** (GitHub branch PR) |
+| Fix-proposal PR creation | **Live on Team** (documentation-only branch PR) |
 | GitHub OAuth + audits | **Live** (requires env) |
 | Stripe billing | **Free + Pro** (requires env) |
 | Demo mode | **Explicit only** (`BOSWELL_DEMO=1`) |
@@ -94,5 +94,5 @@ See `docs/` for architecture, deployment, scoring methodology, and safety policy
 ## Honest limitations
 
 - Engineering Brain uses grounded templates in demo; production LLM Q&A needs `OPENROUTER_API_KEY` wiring.
-- Safe-fix PR creation is simulated in demo; live PRs need GitHub token + implementation in `/api/pr/create`.
+- Fix-proposal PR creation is simulated in demo. Live PRs add a review document; automated code repair is not yet implemented.
 - Vercel cannot run long Python audits — use Render worker (`render.yaml`).

@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { requireDb } from "@/lib/db";
 import { accounts } from "@/lib/db/schema";
+import { decryptToken } from "@/lib/security/token-crypto";
 
 export async function getGithubToken(userId: string): Promise<string | null> {
   const db = requireDb();
@@ -10,5 +11,5 @@ export async function getGithubToken(userId: string): Promise<string | null> {
     .where(and(eq(accounts.userId, userId), eq(accounts.provider, "github")))
     .limit(1);
 
-  return account?.access_token ?? null;
+  return account?.access_token ? decryptToken(account.access_token) : null;
 }

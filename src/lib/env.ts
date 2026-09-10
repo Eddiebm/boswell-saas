@@ -45,6 +45,11 @@ export function getEnvChecks(): EnvCheck[] {
       detail: "Required on worker for Boswell engine LLM audits",
     },
     {
+      name: "Token encryption",
+      status: process.env.TOKEN_ENCRYPTION_KEY ? "ok" : "missing",
+      detail: "Required to encrypt provider credentials before database storage",
+    },
+    {
       name: "Worker secret",
       status: process.env.WORKER_SECRET ? "ok" : "missing",
       detail: "WORKER_SECRET for /api/worker/tick",

@@ -42,7 +42,7 @@ import type { RepoScoreResult } from "@/lib/scoring/types";
 import { emptySlopResult, type SlopResult } from "@/lib/slop/engine";
 import type { AutoFixLevel } from "@/lib/automation/safe-fix-policy";
 import type { FindingClassification } from "@/lib/classification/classify";
-import { canUseExecutiveDashboard, canUseLlmBrain, type PlanId } from "@/lib/plans";
+import { canUseLlmBrain, type PlanId } from "@/lib/plans";
 
 export async function getPrimaryRepoId(userId: string): Promise<string | null> {
   if (isDemoMode()) return DEMO_REPO_ID;

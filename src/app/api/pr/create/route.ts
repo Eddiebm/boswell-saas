@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const rl = rateLimit(`pr:${clientIp(request)}`, 10, 60_000);
+  const rl = await rateLimit(`pr:${session.user.id}:${clientIp(request)}`, 10, 60_000);
   if (!rl.ok) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   if (isDemoMode()) {
     return NextResponse.json({
       ok: true,
-      message: "Demo mode — PR simulated.",
+      message: "Demo mode — fix-proposal PR simulated.",
       prUrl: "https://github.com/example/repo/pull/1",
     });
   }
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      message: "Safe-fix PR opened on a branch (never pushed to main).",
+      message: "Fix-proposal PR opened on a branch. It documents a proposed change; it does not modify product code.",
       prUrl: result.prUrl,
       branch: result.branch,
     });

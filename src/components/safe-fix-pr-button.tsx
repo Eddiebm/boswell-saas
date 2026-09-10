@@ -38,7 +38,7 @@ export function SafeFixPrButton({ itemId }: { itemId: string }) {
   return (
     <div className="space-y-2">
       <Button onClick={createPr} disabled={loading} variant="secondary">
-        {loading ? "Opening PR…" : "Create safe-fix PR"}
+        {loading ? "Opening proposal…" : "Create fix-proposal PR"}
       </Button>
       {message ? <p className="text-sm text-emerald-300">{message}</p> : null}
       {prUrl ? (

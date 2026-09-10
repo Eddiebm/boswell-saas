@@ -4,14 +4,15 @@ import GitHub from "next-auth/providers/github";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
+import { withEncryptedProviderTokens } from "@/lib/auth/encrypted-adapter";
 
 const adapter = db
-  ? DrizzleAdapter(db, {
+  ? withEncryptedProviderTokens(DrizzleAdapter(db, {
       usersTable: schema.users,
       accountsTable: schema.accounts,
       sessionsTable: schema.sessions,
       verificationTokensTable: schema.verificationTokens,
-    })
+    }))
   : undefined;
 
 const providers: NextAuthConfig["providers"] = [];
@@ -23,7 +24,7 @@ if (process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET) {
       clientSecret: process.env.AUTH_GITHUB_SECRET,
       authorization: {
         params: {
-          scope: "read:user user:email repo",
+          scope: "read:user user:email",
         },
       },
     }),
