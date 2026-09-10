@@ -8,10 +8,13 @@ Connection string is in your local `.env.local` (not committed). Copy `DATABASE_
 
 ## Sync env to Vercel
 
-After filling `.env.local`:
+Create a different file and credential set for each target. Never copy the production
+database or secrets into preview or development:
 
 ```bash
-./scripts/push-vercel-env.sh
+./scripts/push-vercel-env.sh production
+./scripts/push-vercel-env.sh preview
+./scripts/push-vercel-env.sh development
 ```
 
 Or paste variables manually at [Vercel env settings](https://vercel.com/eddiebms-projects/boswell-saas/settings/environment-variables).
@@ -23,7 +26,7 @@ Or paste variables manually at [Vercel env settings](https://vercel.com/eddiebms
 | `AUTH_URL` | Yes — your production URL, e.g. `https://boswell-saas.vercel.app` |
 | `AUTH_GITHUB_ID` | Yes |
 | `AUTH_GITHUB_SECRET` | Yes |
-| `WORKER_SECRET` | Yes (random string) |
+| `WORKER_SECRET` | Yes (random string; unique per environment) |
 
 Optional on Vercel: `OPENROUTER_API_KEY` (enables Pro+ LLM answers in Engineering Brain), `STRIPE_*` (billing).
 
@@ -49,7 +52,7 @@ Optional: Render worker via Blueprint (`render.yaml`) if you prefer a always-on 
 ## Verify
 
 - Web loads at Vercel URL
-- Sign in at `/login` → **Continue as owner** (or GitHub OAuth when configured)
+- Sign in at `/login` using GitHub OAuth
 - `/dashboard/admin` shows env checks green
 - Run audit → status moves off `queued` within ~2 min (GitHub Actions worker)
 - Team plan: safe-fix PR opens a branch + proposal file (never pushes to main)
