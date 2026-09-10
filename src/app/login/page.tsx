@@ -1,17 +1,5 @@
 import { signIn } from "@/lib/auth";
-import { signInOwner } from "@/lib/auth/owner-bootstrap";
 import { Button, Card } from "@/components/ui";
-import { redirect } from "next/navigation";
-
-function isNextRedirect(error: unknown) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "digest" in error &&
-    typeof error.digest === "string" &&
-    error.digest.startsWith("NEXT_REDIRECT")
-  );
-}
 
 type LoginPageProps = {
   searchParams: Promise<{ error?: string }>;
@@ -19,7 +7,6 @@ type LoginPageProps = {
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const { error } = await searchParams;
-  const hasBootstrap = Boolean(process.env.GITHUB_BOOTSTRAP_TOKEN);
   const hasOAuth = Boolean(process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET);
 
   return (
@@ -36,36 +23,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </p>
         ) : null}
 
-        {hasBootstrap ? (
-          <form
-            className="mt-8"
-            action={async () => {
-              "use server";
-              try {
-                await signInOwner();
-              } catch (error) {
-                if (isNextRedirect(error)) throw error;
-                const message =
-                  error instanceof Error ? error.message : "Sign-in failed";
-                redirect(`/login?error=${encodeURIComponent(message)}`);
-              }
-            }}
-          >
-            <Button type="submit" className="w-full">
-              Continue as owner
-            </Button>
-          </form>
-        ) : null}
-
         {hasOAuth ? (
           <form
-            className={hasBootstrap ? "mt-3" : "mt-8"}
+            className="mt-8"
             action={async () => {
               "use server";
               await signIn("github", { redirectTo: "/dashboard" });
             }}
           >
-            <Button type="submit" className="w-full" variant={hasBootstrap ? "secondary" : "primary"}>
+            <Button type="submit" className="w-full">
               Continue with GitHub
             </Button>
           </form>
