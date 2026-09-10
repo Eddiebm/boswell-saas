@@ -51,7 +51,7 @@ npm run db:push
 npm run dev:live    # NOT npm run dev (that enables demo mode)
 ```
 
-Sign in → Sync repos → Run audit. **Production audits run on GitHub Actions** (every 2 minutes). For local worker dev only: `BOSWELL_ALLOW_LOCAL_WORKER=1 npm run worker`.
+Sign in with GitHub OAuth → Sync repos → Run audit. **Production audits run on GitHub Actions** (every 2 minutes). For local worker dev only: `BOSWELL_ALLOW_LOCAL_WORKER=1 npm run worker`.
 
 ## Tests
 
