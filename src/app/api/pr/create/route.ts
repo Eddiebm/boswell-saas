@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { getRepositoryForUser } from "@/lib/repositories";
 import { createSafeFixPullRequest } from "@/lib/github/pr";
 import { canUsePrAutomation } from "@/lib/plans";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { rateLimit } from "@/lib/rate-limit";
 import type { PlanId } from "@/lib/plans";
 
 export async function POST(request: Request) {
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const rl = rateLimit(`pr:${clientIp(request)}`, 10, 60_000);
+  const rl = rateLimit(`pr:${session.user.id}`, 10, 60_000);
   if (!rl.ok) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
