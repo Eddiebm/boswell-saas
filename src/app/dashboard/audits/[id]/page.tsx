@@ -8,7 +8,8 @@ import { AuditPoller } from "@/components/audit-poller";
 import { AuditStatusBadge } from "@/components/audit-status-badge";
 import { AuditWaitIndicator } from "@/components/audit-wait-indicator";
 import { OwaspTop10Card } from "@/components/owasp-top10-card";
-import { CopyFixPromptButton } from "@/components/copy-fix-prompt-button";
+import { BuilderRepairBrief } from "@/components/builder-repair-brief";
+import { RetestButton } from "@/components/retest-button";
 import { MarkdownViewer } from "@/components/markdown-viewer";
 import { CoachingCard } from "@/components/coaching-card";
 import { AutoFixBadge, Badge, Card, ClassificationBadge } from "@/components/ui";
@@ -70,6 +71,15 @@ export default async function AuditDetailPage({ params }: Params) {
 
       {report.status === "completed" ? (
         <>
+          {report.verificationDecision ? (
+            <Card className="border-cyan-500/30 bg-cyan-500/5">
+              <p className="text-sm text-cyan-200">Independent repair retest</p>
+              <p className="mt-1 text-2xl font-semibold">{report.verificationDecision}</p>
+              <p className="mt-2 text-sm text-zinc-400">
+                Compared with audit {report.retestOfAuditId}. This is a repair result, not a guarantee that untested risks are absent.
+              </p>
+            </Card>
+          ) : null}
           <div className="grid gap-4 md:grid-cols-5">
             <ScoreGauge score={report.score.overall} label="Health at audit time" />
             <Card>
@@ -96,18 +106,20 @@ export default async function AuditDetailPage({ params }: Params) {
           <section id="fix-prompt" className="space-y-4 scroll-mt-24">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4">
               <div>
-                <h2 className="text-2xl font-semibold text-white">Fix all issues — LLM prompt</h2>
+                <h2 className="text-2xl font-semibold text-white">Send for repair</h2>
                 <p className="mt-1 text-sm text-zinc-300">
-                  Copy this entire prompt into Claude Code, ChatGPT, or Cursor in{" "}
-                  <strong>{report.repoFullName}</strong> to fix all {report.findings.length} issues.
+                  Choose any AI builder, developer, or agency. The brief is bound to{" "}
+                  <strong>{report.auditedCommit?.slice(0, 12) ?? "the audited revision"}</strong> and covers{" "}
+                  {report.findings.length} findings.
                 </p>
               </div>
-              <CopyFixPromptButton prompt={report.fixPrompt} />
             </div>
             <Card className="border-emerald-500/20">
-              <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap text-sm text-zinc-200">
-                {report.fixPrompt}
-              </pre>
+              <BuilderRepairBrief prompts={report.repairPrompts} />
+              <div className="mt-4 border-t border-zinc-800 pt-4">
+                <RetestButton repositoryId={report.repoId} auditId={report.id} />
+                <p className="mt-2 text-xs text-zinc-500">Retests the repository’s current default-branch revision in deep mode.</p>
+              </div>
             </Card>
           </section>
 
