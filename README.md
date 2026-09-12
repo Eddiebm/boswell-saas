@@ -6,7 +6,8 @@ Boswell watches your repositories, understands what changed, remembers engineeri
 
 | Feature | Status |
 |---------|--------|
-| Repo audit + fix prompt | **Live** |
+| Repo audit + builder-agnostic repair brief | **Live** |
+| Repair retest decisions | **Implemented** (deep re-audit of current default branch) |
 | OWASP Top 10:2021 mapping | **Heuristic** (per-finding, on reports) |
 | Health score 0–1000 (9 dimensions) | **Deterministic engine** |
 | AI Slop Score | **Deterministic scanner** |
@@ -15,7 +16,7 @@ Boswell watches your repositories, understands what changed, remembers engineeri
 | Good / bad / dangerous / evil classification | **Implemented** |
 | Engineering Memory | **DB-backed** (after audit) |
 | Engineering Brain Q&A | **Templates on Free, LLM on Pro** |
-| Safe-fix PR creation | **Live on Pro** (GitHub branch PR) |
+| Safe-fix proposal PR creation | **Live on Team+** (GitHub branch PR; never auto-merge) |
 | GitHub OAuth + audits | **Live** (requires env) |
 | Stripe billing | **Free + Pro** (requires env) |
 | Demo mode | **Explicit only** (`BOSWELL_DEMO=1`) |
@@ -59,7 +60,7 @@ Sign in with GitHub OAuth → Sync repos → Run audit. **Production audits run 
 npm test
 ```
 
-Covers: scoring, audit parser, fix-queue, AI slop, classification, safe-fix policy, report generation, memory queries.
+Covers: scoring, audit parser, fix-queue, AI slop, classification, safe-fix policy, report generation, repair contracts, retest decisions, and memory queries.
 
 ## Documentation
 
@@ -94,5 +95,9 @@ See `docs/` for architecture, deployment, scoring methodology, and safety policy
 ## Honest limitations
 
 - Engineering Brain uses grounded templates in demo; production LLM Q&A needs `OPENROUTER_API_KEY` wiring.
-- Safe-fix PR creation is simulated in demo; live PRs need GitHub token + implementation in `/api/pr/create`.
+- Safe-fix proposal PR creation is simulated in demo; live PRs need a GitHub token with write access.
+- Retesting audits the repository's current default branch. Direct pre-merge branch/PR retesting is not implemented yet.
+- Repair decisions compare normalized finding identity. They do not prove that untested defects are absent.
+- Rate limiting is process-local and must be replaced with a shared store before high-volume or multi-instance production use.
+- Existing deployments use `npm run db:push`; introducing migration history requires a separately rehearsed database baseline.
 - Vercel cannot run long Python audits — use Render worker (`render.yaml`).
