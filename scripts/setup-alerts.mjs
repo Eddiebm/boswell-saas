@@ -6,7 +6,7 @@
  *   ADMIN_ALERT_EMAIL=you@example.com node scripts/setup-alerts.mjs
  *   RESEND_API_KEY=re_... ADMIN_ALERT_EMAIL=you@example.com node scripts/setup-alerts.mjs
  */
-import { execFileSync, execSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

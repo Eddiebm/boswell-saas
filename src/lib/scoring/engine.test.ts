@@ -42,6 +42,18 @@ describe("computeRepoScore", () => {
       slopPercent: 20,
     });
     expect(result.dimensions.security).toBeLessThanOrEqual(600);
+    expect(result.overall).toBeLessThanOrEqual(390);
+    expect(result.grade).not.toMatch(/Excellent|Healthy/);
+  });
+
+  it("caps the overall score while a high blocker remains", () => {
+    const result = computeRepoScore({
+      criticalFindings: 0, highFindings: 1, mediumFindings: 0, giantFiles: 0,
+      circularDeps: 0, depCount: 10, missingLockfile: false, hasReadme: true,
+      hasTests: true, testFileCount: 20, sourceFileCount: 30, avgFileLines: 50,
+      maxFileLines: 100, slopPercent: 0, deployVerdict: "Could deploy tomorrow",
+    });
+    expect(result.overall).toBeLessThanOrEqual(590);
   });
 });
 

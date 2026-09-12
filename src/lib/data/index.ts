@@ -33,7 +33,7 @@ import {
 import { getAuditForUser } from "@/lib/audits";
 import { normalizeAuditMode, type AuditMode } from "@/lib/audit-modes";
 import { generateAuditReport, reportToMarkdown } from "@/lib/reports/generate-report";
-import { buildFixPrompt } from "@/lib/reports/fix-prompt";
+import { buildRepairBriefs, type BuilderId } from "@/lib/reports/fix-prompt";
 import { buildOwaspTop10Summary, mapFindingToOwasp, type OwaspTop10Summary } from "@/lib/reports/owasp-top10";
 import { groupByPriority, prioritizeFindings } from "@/lib/reports/prioritize-findings";
 import type { DailyBriefing } from "@/lib/briefing/build-briefing";
@@ -42,7 +42,7 @@ import type { RepoScoreResult } from "@/lib/scoring/types";
 import { emptySlopResult, type SlopResult } from "@/lib/slop/engine";
 import type { AutoFixLevel } from "@/lib/automation/safe-fix-policy";
 import type { FindingClassification } from "@/lib/classification/classify";
-import { canUseExecutiveDashboard, canUseLlmBrain, type PlanId } from "@/lib/plans";
+import { canUseLlmBrain, type PlanId } from "@/lib/plans";
 
 export async function getPrimaryRepoId(userId: string): Promise<string | null> {
   if (isDemoMode()) return DEMO_REPO_ID;
@@ -275,6 +275,10 @@ export type AuditReportView = {
   costUsd?: string | null;
   consumerSummary: string;
   fixPrompt: string;
+  repairPrompts: Record<BuilderId, string>;
+  auditedCommit?: string | null;
+  verificationDecision?: string | null;
+  retestOfAuditId?: string | null;
   markdown: string;
   structured: ReturnType<typeof generateAuditReport> | null;
   findings: AuditFindingView[];
@@ -317,8 +321,10 @@ export async function getAuditReport(userId: string, auditId: string): Promise<A
         owaspName: owasp.owaspId !== "none" ? owasp.owaspName : undefined,
       };
     });
-    const demoPrompt = buildFixPrompt({
+    const demoPrompts = buildRepairBriefs({
       repoName: "Eddiebm/audiolens-app",
+      auditedCommit: "demo-commit",
+      auditId,
       stack: ["Next.js", "React"],
       consumerSummary: demoBriefing.plainEnglishSummary,
       releaseReadiness: demoBriefing.releaseReadiness,
@@ -333,7 +339,11 @@ export async function getAuditReport(userId: string, auditId: string): Promise<A
       auditMode: "standard",
       costUsd: "0.32",
       consumerSummary: demoBriefing.plainEnglishSummary,
-      fixPrompt: demoPrompt,
+      fixPrompt: demoPrompts.universal,
+      repairPrompts: demoPrompts,
+      auditedCommit: "demo-commit",
+      verificationDecision: null,
+      retestOfAuditId: null,
       markdown: demoAuditMarkdown,
       structured: demoStructuredReport,
       findings: demoWithOwasp,
@@ -469,8 +479,10 @@ export async function getAuditReport(userId: string, auditId: string): Promise<A
     run.summary ??
     "";
 
-  const fixPrompt = buildFixPrompt({
+  const repairPrompts = buildRepairBriefs({
     repoName: repo.fullName,
+    auditedCommit: run.commitSha,
+    auditId,
     stack: (run.stack as string[] | null) ?? [],
     consumerSummary,
     releaseReadiness: briefing.releaseReadiness,
@@ -485,6 +497,7 @@ export async function getAuditReport(userId: string, auditId: string): Promise<A
       filePath: f.filePath,
       category: (f as { category?: string }).category,
       coaching: f.coaching as CoachingSections | null,
+      evidence: f.evidence,
     })),
     costUsd: run.costUsd,
   });
@@ -499,7 +512,11 @@ export async function getAuditReport(userId: string, auditId: string): Promise<A
     auditMode: normalizeAuditMode(run.auditMode),
     costUsd: run.costUsd,
     consumerSummary,
-    fixPrompt,
+    fixPrompt: repairPrompts.universal,
+    repairPrompts,
+    auditedCommit: run.commitSha,
+    verificationDecision: run.verificationDecision,
+    retestOfAuditId: run.retestOfAuditId,
     markdown,
     structured,
     findings: findingsWithOwasp,

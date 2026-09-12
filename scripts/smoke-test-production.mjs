@@ -22,7 +22,7 @@ async function check(name, fn) {
 }
 
 async function fetchStatus(path, init) {
-  const res = await fetch(`${BASE_URL}${path}`, init);
+  const res = await fetch(`${BASE_URL}${path}`, { redirect: "manual", ...init });
   return res.status;
 }
 
@@ -74,6 +74,7 @@ await check("POST /api/brain requires auth", async () => {
 
 try {
   const { execFileSync } = await import("node:child_process");
+  execFileSync("gh", ["--version"], { stdio: "ignore" });
   await check("GitHub Actions worker recent run succeeded", async () => {
     const out = execFileSync(
       "gh",

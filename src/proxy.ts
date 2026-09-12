@@ -2,10 +2,8 @@ import { isDemoMode } from "@/lib/demo/mode";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export default async function middleware(request: NextRequest) {
-  if (isDemoMode()) {
-    return NextResponse.next();
-  }
+export default async function proxy(request: NextRequest) {
+  if (isDemoMode()) return NextResponse.next();
 
   const { auth } = await import("@/lib/auth");
   return auth((req) => {

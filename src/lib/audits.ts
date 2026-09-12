@@ -27,9 +27,9 @@ import {
 import type { AuditMode } from "@/lib/audit-modes";
 import { normalizeAuditMode } from "@/lib/audit-modes";
 import { generateAuditReport, reportToMarkdown } from "@/lib/reports/generate-report";
-import { processAuditJob } from "@/lib/worker/process-audit";
 import { sendAuditAlert } from "@/lib/alerts/audit-alerts";
 import { triggerAuditWorkerDispatch } from "@/lib/worker/trigger-worker";
+import { decideRepairVerification, findingKey } from "@/lib/verification/decision";
 
 export async function listAuditsForUser(userId: string) {
   const db = requireDb();
@@ -107,7 +107,12 @@ async function ensureAuditQuota(userId: string) {
   }
 }
 
-export async function queueAudit(userId: string, repositoryId: string, auditMode: AuditMode = "standard") {
+export async function queueAudit(
+  userId: string,
+  repositoryId: string,
+  auditMode: AuditMode = "standard",
+  retestOfAuditId?: string,
+) {
   const db = requireDb();
   await ensureAuditQuota(userId);
   const mode = normalizeAuditMode(auditMode);
@@ -122,6 +127,13 @@ export async function queueAudit(userId: string, repositoryId: string, auditMode
     throw new Error("Repository not found");
   }
 
+  if (retestOfAuditId) {
+    const prior = await getAuditForUser(userId, retestOfAuditId);
+    if (!prior || prior.run.repositoryId !== repositoryId || prior.run.status !== "completed") {
+      throw new Error("The original completed audit was not found for this repository");
+    }
+  }
+
   const [run] = await db
     .insert(auditRuns)
     .values({
@@ -129,6 +141,7 @@ export async function queueAudit(userId: string, repositoryId: string, auditMode
       repositoryId,
       status: "queued",
       auditMode: mode,
+      retestOfAuditId,
     })
     .returning();
 
@@ -285,6 +298,8 @@ export async function runQueuedAudit(auditId: string) {
   if (!token) throw new Error("Missing GitHub token");
 
   try {
+    // Keep the Python audit worker out of web-route bundles; it only runs in the worker process.
+    const { processAuditJob } = await import("@/lib/worker/process-audit");
     const result = await processAuditJob({
       cloneUrl: repo.cloneUrl,
       githubToken: token,
@@ -319,6 +334,7 @@ export async function runQueuedAudit(auditId: string) {
             filePath: f.filePath,
             lineStart: f.lineStart,
             recommendation: f.recommendation,
+            evidence: f.filePath ? [`${f.filePath}:${f.lineStart ?? 1}`] : [],
             simpleExplanation: enriched.simpleExplanation,
             classification: enriched.classification,
             fixSteps: enriched.canOpenPr
@@ -450,6 +466,31 @@ export async function runQueuedAudit(auditId: string) {
 
     const fullMarkdown = reportToMarkdown(structuredReport);
 
+    let verificationDecision: ReturnType<typeof decideRepairVerification> | null = null;
+    if (run.retestOfAuditId) {
+      const previousFindings = await db
+        .select()
+        .from(findings)
+        .where(eq(findings.auditRunId, run.retestOfAuditId));
+      const currentKeys = new Set(result.findings.map(findingKey));
+      for (const previous of previousFindings) {
+        const stillPresent = currentKeys.has(findingKey(previous));
+        await db
+          .update(findings)
+          .set({
+            status: stillPresent ? "recurring" : "fixed",
+            resolved: !stillPresent,
+            fixedAt: stillPresent ? null : new Date(),
+            lastSeenAt: new Date(),
+          })
+          .where(eq(findings.id, previous.id));
+      }
+      verificationDecision = decideRepairVerification({
+        previous: previousFindings,
+        current: result.findings,
+      });
+    }
+
     await db.insert(reports).values({
       auditRunId: run.id,
       docType: "full",
@@ -529,6 +570,8 @@ export async function runQueuedAudit(auditId: string) {
         briefingJson: briefing,
         slopJson: result.slop,
         scoresJson: score,
+        commitSha: result.commitSha,
+        verificationDecision,
       })
       .where(eq(auditRuns.id, run.id));
 

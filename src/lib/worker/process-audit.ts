@@ -22,6 +22,7 @@ export type ProcessedFinding = {
 };
 
 export type ProcessAuditResult = {
+  commitSha: string;
   documents: Record<string, string>;
   findings: ProcessedFinding[];
   stack: string[];
@@ -33,11 +34,15 @@ export type ProcessAuditResult = {
   topRisk?: string;
 };
 
-function authedCloneUrl(cloneUrl: string, token: string) {
-  if (!cloneUrl.startsWith("https://github.com/")) {
-    return cloneUrl;
-  }
-  return cloneUrl.replace("https://github.com/", `https://x-access-token:${token}@github.com/`);
+function gitAuthEnv(token: string): NodeJS.ProcessEnv {
+  const basic = Buffer.from(`x-access-token:${token}`, "utf8").toString("base64");
+  return {
+    ...process.env,
+    GIT_TERMINAL_PROMPT: "0",
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: "http.extraHeader",
+    GIT_CONFIG_VALUE_0: `Authorization: Basic ${basic}`,
+  };
 }
 
 function readIfExists(filePath: string) {
@@ -112,9 +117,14 @@ export async function processAuditJob(input: {
   try {
     execFileSync(
       "git",
-      ["clone", "--depth", "50", authedCloneUrl(input.cloneUrl, input.githubToken), repoDir],
-      { stdio: "pipe", env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } },
+      ["clone", "--depth", "50", input.cloneUrl, repoDir],
+      { stdio: "pipe", env: gitAuthEnv(input.githubToken) },
     );
+    const commitSha = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repoDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
 
     installBoswellEngine(engineSpec);
     runBoswellEngine(repoDir, openRouterKey, normalizeAuditMode(input.auditMode));
@@ -188,6 +198,7 @@ export async function processAuditJob(input: {
     };
 
     return {
+      commitSha,
       documents: {
         audit,
         handoff,
