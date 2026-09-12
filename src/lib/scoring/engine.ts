@@ -98,7 +98,10 @@ export function computeRepoScore(input: ScoreInput): RepoScoreResult {
     overall += dimensions[key] * SCORE_WEIGHTS[key];
   }
 
-  const rounded = clamp(overall);
+  // A weighted average must never hide a release blocker behind strong hygiene scores.
+  let rounded = clamp(overall);
+  if (input.criticalFindings > 0) rounded = Math.min(rounded, 390);
+  else if (input.highFindings > 0) rounded = Math.min(rounded, 590);
   return {
     overall: rounded,
     dimensions,
