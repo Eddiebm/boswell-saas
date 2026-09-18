@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canUseDynamicVerify,
   canUseExecutiveDashboard,
   canUseLlmBrain,
   canUsePrAutomation,
@@ -20,5 +21,7 @@ describe("plans", () => {
     expect(canUseLlmBrain("free")).toBe(false);
     expect(canUseExecutiveDashboard("pro")).toBe(true);
     expect(canUseExecutiveDashboard("free")).toBe(false);
+    expect(canUseDynamicVerify("pro")).toBe(true);
+    expect(canUseDynamicVerify("free")).toBe(false);
   });
 });

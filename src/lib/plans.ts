@@ -20,6 +20,7 @@ export const PLANS = {
       "Safe-fix PR automation",
       "Executive summary + fix queue",
       "Priority worker queue",
+      "Live access-control verification (beta, staging only)",
     ],
   },
   team: {
@@ -75,5 +76,9 @@ export function canUseLlmBrain(plan: PlanId): boolean {
 }
 
 export function canUseExecutiveDashboard(plan: PlanId): boolean {
+  return planMeetsMinimum(plan, "pro");
+}
+
+export function canUseDynamicVerify(plan: PlanId): boolean {
   return planMeetsMinimum(plan, "pro");
 }
