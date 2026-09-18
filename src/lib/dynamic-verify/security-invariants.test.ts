@@ -41,4 +41,11 @@ describe("dynamic-verify safety invariants", () => {
     expect(targetsRoute).toContain("canUseDynamicVerify");
     expect(targetsRoute).toContain("consentConfirmed");
   });
+
+  it("keeps discovery a pure static analyzer with no network access", () => {
+    const discover = read("src/lib/dynamic-verify/discover.ts");
+    expect(discover).not.toContain("fetch(");
+    expect(discover).not.toContain("http.");
+    expect(discover).not.toContain("https.");
+  });
 });

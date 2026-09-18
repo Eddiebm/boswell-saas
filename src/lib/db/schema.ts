@@ -12,6 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
+import type { DiscoveryResult } from "@/lib/dynamic-verify/discover";
 
 export const auditStatusEnum = pgEnum("audit_status", [
   "queued",
@@ -148,6 +149,7 @@ export const repositories = pgTable("repositories", {
   description: text("description"),
   healthScore: integer("health_score"),
   slopPercent: real("slop_percent"),
+  discoveryJson: jsonb("discovery_json").$type<DiscoveryResult>(),
   lastAuditAt: timestamp("last_audit_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });

@@ -10,7 +10,7 @@ import { VerifyRunButton } from "@/components/verify-run-button";
 import { getPrimaryRepoId, getPrimaryRepository } from "@/lib/data";
 import { requireUserId } from "@/lib/session";
 import { canUseDynamicVerify, type PlanId } from "@/lib/plans";
-import { listVerifyRuns, listVerifyTargets } from "@/lib/dynamic-verify/run";
+import { getDiscoveredCandidates, listVerifyRuns, listVerifyTargets } from "@/lib/dynamic-verify/run";
 
 const RESULT_TONE: Record<string, "good" | "warn" | "bad" | "neutral"> = {
   leak_confirmed: "bad",
@@ -69,12 +69,17 @@ async function VerifyPageBody({ userId, repositoryId }: { userId: string; reposi
   const runsByTarget = await Promise.all(
     targets.map(async (target) => ({ target, runs: await listVerifyRuns(userId, target.id) })),
   );
+  const discovery = await getDiscoveredCandidates(userId, repositoryId);
 
   return (
     <div className="space-y-6">
       <Card>
         <h2 className="mb-4 text-xl font-medium">Add a target</h2>
-        <VerifyTargetForm repositoryId={repositoryId} />
+        <VerifyTargetForm
+          repositoryId={repositoryId}
+          loginCandidates={discovery.loginCandidates}
+          resourceCandidates={discovery.resourceCandidates}
+        />
       </Card>
 
       {runsByTarget.map(({ target, runs }) => (

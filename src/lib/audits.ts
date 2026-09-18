@@ -538,6 +538,7 @@ export async function runQueuedAudit(auditId: string) {
         lastAuditAt: new Date(),
         healthScore: score.overall,
         slopPercent: result.slop.overallPercent,
+        discoveryJson: result.discovery,
       })
       .where(eq(repositories.id, repo.id));
 

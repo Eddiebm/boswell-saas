@@ -3,6 +3,7 @@ import { requireDb } from "@/lib/db";
 import { fixQueueItems, memoryEvents, repositories, users, verifyRuns, verifyTargets } from "@/lib/db/schema";
 import { canUseDynamicVerify } from "@/lib/plans";
 import { runAccessControlCheck, type VerifyTargetConfig } from "@/lib/dynamic-verify/engine";
+import type { DiscoveryResult } from "@/lib/dynamic-verify/discover";
 
 const QUEUED_TIMEOUT_MS = 60 * 60 * 1000;
 const RUNNING_TIMEOUT_MS = 10 * 60 * 1000;
@@ -71,6 +72,25 @@ export async function createVerifyTarget(
     .returning();
 
   return target;
+}
+
+/**
+ * Candidates discovered statically from the repo's own source during the
+ * most recent audit (`src/lib/dynamic-verify/discover.ts`, run inside
+ * `processAuditJob`). Refreshes every audit — no separate clone or scan.
+ */
+export async function getDiscoveredCandidates(
+  userId: string,
+  repositoryId: string,
+): Promise<DiscoveryResult> {
+  const db = requireDb();
+  const [repo] = await db
+    .select({ discoveryJson: repositories.discoveryJson })
+    .from(repositories)
+    .where(and(eq(repositories.id, repositoryId), eq(repositories.userId, userId)))
+    .limit(1);
+
+  return repo?.discoveryJson ?? { loginCandidates: [], resourceCandidates: [] };
 }
 
 export async function listVerifyTargets(userId: string, repositoryId: string) {
