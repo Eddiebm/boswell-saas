@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getOptionalUserId } from "@/lib/session";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { listVerifyRuns, queueVerifyRun } from "@/lib/dynamic-verify/run";
 import { triggerAuditWorkerDispatch } from "@/lib/worker/trigger-worker";
+import { isDemoMode } from "@/lib/demo/mode";
 
 export async function GET(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await getOptionalUserId();
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -15,13 +16,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "targetId required" }, { status: 400 });
   }
 
-  const runs = await listVerifyRuns(session.user.id, targetId);
+  const runs = await listVerifyRuns(userId, targetId);
   return NextResponse.json({ runs });
 }
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await getOptionalUserId();
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -36,10 +37,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const run = await queueVerifyRun(session.user.id, body.targetId);
-    void triggerAuditWorkerDispatch().catch(() => {
-      /* cron fallback */
-    });
+    const run = await queueVerifyRun(userId, body.targetId);
+    if (!isDemoMode()) {
+      void triggerAuditWorkerDispatch().catch(() => {
+        /* cron fallback */
+      });
+    }
     return NextResponse.json({
       run,
       message: "Verification run queued. Ensure npm run worker is running to process it.",

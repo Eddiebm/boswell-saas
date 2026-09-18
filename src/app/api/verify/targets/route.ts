@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getOptionalUserId } from "@/lib/session";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { canUseDynamicVerify } from "@/lib/plans";
 import { createVerifyTarget, listVerifyTargets } from "@/lib/dynamic-verify/run";
 import { requireDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { isDemoMode } from "@/lib/demo/mode";
 
 export async function GET(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await getOptionalUserId();
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -18,23 +19,25 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "repositoryId required" }, { status: 400 });
   }
 
-  const targets = await listVerifyTargets(session.user.id, repositoryId);
+  const targets = await listVerifyTargets(userId, repositoryId);
   return NextResponse.json({ targets });
 }
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await getOptionalUserId();
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const db = requireDb();
-  const [user] = await db.select().from(users).where(eq(users.id, session.user.id)).limit(1);
-  if (!user || !canUseDynamicVerify(user.plan)) {
-    return NextResponse.json(
-      { error: "Live access-control verification requires the Pro plan." },
-      { status: 403 },
-    );
+  if (!isDemoMode()) {
+    const db = requireDb();
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user || !canUseDynamicVerify(user.plan)) {
+      return NextResponse.json(
+        { error: "Live access-control verification requires the Pro plan." },
+        { status: 403 },
+      );
+    }
   }
 
   const rl = rateLimit(`verify-target:${clientIp(request)}`, 10, 60_000);
@@ -72,7 +75,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const target = await createVerifyTarget(session.user.id, body.repositoryId as string, {
+    const target = await createVerifyTarget(userId, body.repositoryId as string, {
       label: body.label as string,
       stagingUrl: body.stagingUrl as string,
       loginPath: body.loginPath as string,
