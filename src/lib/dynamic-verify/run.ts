@@ -4,6 +4,8 @@ import { fixQueueItems, memoryEvents, repositories, users, verifyRuns, verifyTar
 import { canUseDynamicVerify } from "@/lib/plans";
 import { runAccessControlCheck, type VerifyTargetConfig } from "@/lib/dynamic-verify/engine";
 import type { DiscoveryResult } from "@/lib/dynamic-verify/discover";
+import { isDemoMode } from "@/lib/demo/mode";
+import { demoDiscovery, demoVerifyRuns, demoVerifyTargets, DEMO_VERIFY_TARGET_ID } from "@/lib/demo/data";
 
 const QUEUED_TIMEOUT_MS = 60 * 60 * 1000;
 const RUNNING_TIMEOUT_MS = 10 * 60 * 1000;
@@ -22,6 +24,7 @@ export type CreateVerifyTargetInput = {
 };
 
 async function requirePlanAndOwnership(userId: string, repositoryId: string) {
+  if (isDemoMode()) return;
   const db = requireDb();
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user || !canUseDynamicVerify(user.plan)) {
@@ -50,6 +53,11 @@ export async function createVerifyTarget(
     throw new Error(
       "consentConfirmed must be true: you must confirm this is a staging/non-production environment you're authorized to test.",
     );
+  }
+
+  if (isDemoMode()) {
+    // Demo mode is read-only sample data — nothing is persisted.
+    return demoVerifyTargets[0];
   }
 
   const db = requireDb();
@@ -83,6 +91,7 @@ export async function getDiscoveredCandidates(
   userId: string,
   repositoryId: string,
 ): Promise<DiscoveryResult> {
+  if (isDemoMode()) return demoDiscovery;
   const db = requireDb();
   const [repo] = await db
     .select({ discoveryJson: repositories.discoveryJson })
@@ -94,6 +103,7 @@ export async function getDiscoveredCandidates(
 }
 
 export async function listVerifyTargets(userId: string, repositoryId: string) {
+  if (isDemoMode()) return demoVerifyTargets;
   const db = requireDb();
   return db
     .select()
@@ -103,6 +113,7 @@ export async function listVerifyTargets(userId: string, repositoryId: string) {
 }
 
 export async function listVerifyRuns(userId: string, targetId: string) {
+  if (isDemoMode()) return targetId === DEMO_VERIFY_TARGET_ID ? demoVerifyRuns : [];
   const db = requireDb();
   return db
     .select()
@@ -113,6 +124,10 @@ export async function listVerifyRuns(userId: string, targetId: string) {
 }
 
 export async function queueVerifyRun(userId: string, targetId: string) {
+  if (isDemoMode()) {
+    // Demo mode is read-only sample data — nothing is queued or persisted.
+    return demoVerifyRuns[0];
+  }
   const db = requireDb();
   const [target] = await db
     .select()

@@ -9,6 +9,7 @@ import { VerifyTargetForm } from "@/components/verify-target-form";
 import { VerifyRunButton } from "@/components/verify-run-button";
 import { getPrimaryRepoId, getPrimaryRepository } from "@/lib/data";
 import { requireUserId } from "@/lib/session";
+import { isDemoMode } from "@/lib/demo/mode";
 import { canUseDynamicVerify, type PlanId } from "@/lib/plans";
 import { getDiscoveredCandidates, listVerifyRuns, listVerifyTargets } from "@/lib/dynamic-verify/run";
 
@@ -23,9 +24,15 @@ const RESULT_TONE: Record<string, "good" | "warn" | "bad" | "neutral"> = {
 
 export default async function VerifyPage() {
   const userId = await requireUserId();
-  const db = requireDb();
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  const plan = (user?.plan ?? "free") as PlanId;
+  let plan: PlanId = "free";
+  if (isDemoMode()) {
+    // Demo mode showcases every plan tier's features, same as the brain/executive pages.
+    plan = "pro";
+  } else {
+    const db = requireDb();
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    plan = (user?.plan ?? "free") as PlanId;
+  }
   const allowed = canUseDynamicVerify(plan);
 
   const primaryRepoId = await getPrimaryRepoId(userId);
