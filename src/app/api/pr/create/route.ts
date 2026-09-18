@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isDemoMode } from "@/lib/demo/mode";
 import { requireDb } from "@/lib/db";
-import { fixQueueItems, pullRequests, repositories, users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { accounts, fixQueueItems, pullRequests, repositories, users } from "@/lib/db/schema";
+import { and, eq } from "drizzle-orm";
 import { getRepositoryForUser } from "@/lib/repositories";
 import { createSafeFixPullRequest } from "@/lib/github/pr";
 import { canUsePrAutomation } from "@/lib/plans";
@@ -35,6 +35,27 @@ export async function POST(request: Request) {
   if (!canUsePrAutomation(plan)) {
     return NextResponse.json(
       { error: "PR automation requires Team plan or higher." },
+      { status: 403 },
+    );
+  }
+
+  // The `repo` scope is only ever requested from Pro+ users, and only when
+  // they actually reach this endpoint (see src/lib/auth/step-up.ts). If the
+  // connected GitHub account hasn't been upgraded yet, tell the client so it
+  // can trigger that re-authorization instead of failing deep inside the
+  // GitHub API call below.
+  const [githubAccount] = await db
+    .select({ scope: accounts.scope })
+    .from(accounts)
+    .where(and(eq(accounts.userId, session.user.id), eq(accounts.provider, "github")))
+    .limit(1);
+  const grantedScopes = githubAccount?.scope?.split(/[\s,]+/).filter(Boolean) ?? [];
+  if (!grantedScopes.includes("repo")) {
+    return NextResponse.json(
+      {
+        error: "GitHub authorization needs to be upgraded to allow PR automation.",
+        needsRepoScope: true,
+      },
       { status: 403 },
     );
   }
