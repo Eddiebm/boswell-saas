@@ -31,9 +31,24 @@ export type VerifyCheckResult = {
 
 type Session = { cookie?: string; bearer?: string };
 
+const REQUEST_TIMEOUT_MS = 15_000;
+
+/**
+ * Resolves a path against the staging origin and refuses to leave it. A
+ * loginPath/resourcePathTemplate is attacker-controlled input — if it were
+ * itself an absolute URL, `new URL(path, base)` would silently ignore
+ * `base` and resolve to that other host instead.
+ */
 function resolveUrl(base: string, pathOrTemplate: string, id?: string) {
   const resolvedPath = id ? pathOrTemplate.replace("{id}", encodeURIComponent(id)) : pathOrTemplate;
-  return new URL(resolvedPath, base).toString();
+  const url = new URL(resolvedPath, base);
+  const baseOrigin = new URL(base).origin;
+  if (url.origin !== baseOrigin) {
+    throw new Error(
+      `Resolved URL origin (${url.origin}) does not match the staging origin (${baseOrigin}) — refusing to request it`,
+    );
+  }
+  return url.toString();
 }
 
 async function login(config: VerifyTargetConfig, email: string, password: string): Promise<Session> {
@@ -43,6 +58,7 @@ async function login(config: VerifyTargetConfig, email: string, password: string
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
     redirect: "manual",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 
   const cookie = res.headers.get("set-cookie") ?? undefined;
@@ -73,7 +89,11 @@ function sessionHeaders(session: Session): HeadersInit {
 
 /** GET only — this function must never issue a mutating request. */
 async function fetchResourceAsGet(url: string, session: Session): Promise<{ status: number; text: string }> {
-  const res = await fetch(url, { method: "GET", headers: sessionHeaders(session) });
+  const res = await fetch(url, {
+    method: "GET",
+    headers: sessionHeaders(session),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
   const text = await res.text();
   return { status: res.status, text };
 }

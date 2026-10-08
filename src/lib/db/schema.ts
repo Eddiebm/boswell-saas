@@ -303,6 +303,13 @@ export const fixQueueItems = pgTable("fix_queue_items", {
   canAutoPr: boolean("can_auto_pr").default(false).notNull(),
   priorityScore: integer("priority_score").notNull(),
   status: fixQueueStatusEnum("status").default("pending").notNull(),
+  /**
+   * Which process produced this item. The audit refresh in
+   * `runQueuedAudit()` deletes+reinserts pending items, but must only
+   * touch the ones it owns — a dynamic-verify leak finding is otherwise
+   * silently wiped on the next audit even though it's still true.
+   */
+  source: text("source").default("audit").notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });
 

@@ -6,6 +6,7 @@ import { runAccessControlCheck, type VerifyTargetConfig } from "@/lib/dynamic-ve
 import type { DiscoveryResult } from "@/lib/dynamic-verify/discover";
 import { isDemoMode } from "@/lib/demo/mode";
 import { demoDiscovery, demoVerifyRuns, demoVerifyTargets, DEMO_VERIFY_TARGET_ID } from "@/lib/demo/data";
+import { assertRelativePath, assertSafeStagingUrl } from "@/lib/dynamic-verify/validate-target";
 
 const QUEUED_TIMEOUT_MS = 60 * 60 * 1000;
 const RUNNING_TIMEOUT_MS = 10 * 60 * 1000;
@@ -55,10 +56,22 @@ export async function createVerifyTarget(
     );
   }
 
+  if (input.accountAEmail.trim().toLowerCase() === input.accountBEmail.trim().toLowerCase()) {
+    throw new Error(
+      "accountAEmail and accountBEmail must be two different accounts — using the same account for both always reads as a leak.",
+    );
+  }
+
   if (isDemoMode()) {
     // Demo mode is read-only sample data — nothing is persisted.
     return demoVerifyTargets[0];
   }
+
+  // Attacker-controlled destination: reject anything but a public http(s)
+  // host, and refuse login/resource paths that could resolve off-origin.
+  await assertSafeStagingUrl(input.stagingUrl);
+  assertRelativePath(input.loginPath, "loginPath");
+  assertRelativePath(input.resourcePathTemplate, "resourcePathTemplate");
 
   const db = requireDb();
   const [target] = await db
@@ -140,6 +153,10 @@ export async function queueVerifyRun(userId: string, targetId: string) {
   if (!target.consentConfirmedAt) throw new Error("This target has not confirmed consent");
 
   await requirePlanAndOwnership(userId, target.repositoryId);
+
+  // Re-check at run time, not just at creation: catches rows saved before
+  // this validation existed and DNS rebinding between save and run.
+  await assertSafeStagingUrl(target.stagingUrl);
 
   const [run] = await db
     .insert(verifyRuns)
@@ -224,7 +241,22 @@ async function recordLeakInMemoryAndFixQueue(repositoryId: string, target: typeo
     suggestedFix: `Add an ownership check on the handler behind ${target.resourcePathTemplate} so it verifies the resource belongs to the authenticated account before returning it.`,
     canAutoPr: false,
     priorityScore: 1000,
+    source: "dynamic_verify",
   });
+}
+
+/**
+ * Strips the stored test-account passwords before a target is ever
+ * serialized back to the client — they're write-only from the API's
+ * perspective. Accepts both real DB rows and the demo-seeded shape.
+ */
+export function toPublicTarget<T extends Record<string, unknown>>(
+  target: T,
+): Omit<T, "accountAPassword" | "accountBPassword"> {
+  const rest = { ...target };
+  delete rest.accountAPassword;
+  delete rest.accountBPassword;
+  return rest;
 }
 
 export async function runQueuedVerifyRun(runId: string) {

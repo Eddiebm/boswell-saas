@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getOptionalUserId } from "@/lib/session";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { canUseDynamicVerify } from "@/lib/plans";
-import { createVerifyTarget, listVerifyTargets } from "@/lib/dynamic-verify/run";
+import { createVerifyTarget, listVerifyTargets, toPublicTarget } from "@/lib/dynamic-verify/run";
 import { requireDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   }
 
   const targets = await listVerifyTargets(userId, repositoryId);
-  return NextResponse.json({ targets });
+  return NextResponse.json({ targets: targets.map(toPublicTarget) });
 }
 
 export async function POST(request: Request) {
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
       accountAResourceId: body.accountAResourceId as string,
       consentConfirmed: true,
     });
-    return NextResponse.json({ target });
+    return NextResponse.json({ target: toPublicTarget(target) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create verification target";
     return NextResponse.json({ error: message }, { status: 400 });

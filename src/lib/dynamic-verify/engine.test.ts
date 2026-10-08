@@ -97,4 +97,40 @@ describe("runAccessControlCheck", () => {
 
     await expect(runAccessControlCheck(config)).rejects.toThrow(/Login failed/);
   });
+
+  it("refuses to follow a resourcePathTemplate that resolves to a different origin", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(200, { token: "token-a" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const hijacked = { ...config, resourcePathTemplate: "https://evil.example/orders/{id}" };
+    await expect(runAccessControlCheck(hijacked)).rejects.toThrow(/does not match the staging origin/);
+    // Only the login call should have gone out — never a request to evil.example.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses to follow a loginPath that resolves to a different origin", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const hijacked = { ...config, loginPath: "https://evil.example/collect" };
+    await expect(runAccessControlCheck(hijacked)).rejects.toThrow(/does not match the staging origin/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("attaches a timeout signal to every outbound request", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { token: "token-a" }))
+      .mockResolvedValueOnce(jsonResponse(200, { id: "order-123" }))
+      .mockResolvedValueOnce(jsonResponse(200, { token: "token-b" }))
+      .mockResolvedValueOnce(jsonResponse(403, {}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runAccessControlCheck(config);
+
+    for (const call of fetchMock.mock.calls) {
+      const init = call[1] as RequestInit | undefined;
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    }
+  });
 });
