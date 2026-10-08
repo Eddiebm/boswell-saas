@@ -1,5 +1,6 @@
 import http from "node:http";
 import { processWorkerTick } from "../src/lib/audits";
+import { processVerifyWorkerTick } from "../src/lib/dynamic-verify/run";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -33,9 +34,16 @@ async function main() {
       const result = await processWorkerTick();
       if (result.processed && "auditId" in result) {
         console.log(`Processed audit ${result.auditId}`, result.ok ? "ok" : result.error);
-      } else {
-        await sleep(5000);
+        continue;
       }
+
+      const verifyResult = await processVerifyWorkerTick();
+      if (verifyResult.processed && "runId" in verifyResult) {
+        console.log(`Processed verify run ${verifyResult.runId}`, verifyResult.ok ? "ok" : verifyResult.error);
+        continue;
+      }
+
+      await sleep(5000);
     } catch (error) {
       console.error("Worker tick failed", error);
       await sleep(5000);

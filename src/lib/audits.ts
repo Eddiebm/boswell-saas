@@ -490,7 +490,13 @@ export async function runQueuedAudit(auditId: string) {
 
     await db
       .delete(fixQueueItems)
-      .where(and(eq(fixQueueItems.repositoryId, repo.id), eq(fixQueueItems.status, "pending")));
+      .where(
+        and(
+          eq(fixQueueItems.repositoryId, repo.id),
+          eq(fixQueueItems.status, "pending"),
+          eq(fixQueueItems.source, "audit"),
+        ),
+      );
 
     if (queue.length) {
       await db.insert(fixQueueItems).values(
@@ -505,6 +511,7 @@ export async function runQueuedAudit(auditId: string) {
           suggestedFix: q.suggestedFix,
           canAutoPr: q.canAutoPr,
           priorityScore: q.priorityScore,
+          source: "audit",
         })),
       );
     }
@@ -538,6 +545,7 @@ export async function runQueuedAudit(auditId: string) {
         lastAuditAt: new Date(),
         healthScore: score.overall,
         slopPercent: result.slop.overallPercent,
+        discoveryJson: result.discovery,
       })
       .where(eq(repositories.id, repo.id));
 

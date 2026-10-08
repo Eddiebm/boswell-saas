@@ -1,5 +1,6 @@
 import { parseAuditMarkdown, parseLeakMetadata } from "@/lib/parsers/audit-parser";
 import { scanAiSlop, type SlopResult } from "@/lib/slop/engine";
+import { discoverVerifyCandidates, type DiscoveryResult } from "@/lib/dynamic-verify/discover";
 import type { ScoreInput } from "@/lib/scoring/types";
 import type { AuditMode } from "@/lib/audit-modes";
 import { normalizeAuditMode } from "@/lib/audit-modes";
@@ -31,6 +32,7 @@ export type ProcessAuditResult = {
   summary?: string;
   deployVerdict?: string;
   topRisk?: string;
+  discovery: DiscoveryResult;
 };
 
 function authedCloneUrl(cloneUrl: string, token: string) {
@@ -162,6 +164,7 @@ export async function processAuditJob(input: {
 
     const slopFiles = walkSourceFiles(repoDir).slice(0, 200);
     const slop = scanAiSlop({ files: slopFiles });
+    const discovery = discoverVerifyCandidates(slopFiles);
 
     const critical = merged.filter((f) => f.severity === "CRITICAL").length;
     const high = merged.filter((f) => f.severity === "HIGH").length;
@@ -203,6 +206,7 @@ export async function processAuditJob(input: {
       summary: `Audit completed for ${input.repoFullName}`,
       deployVerdict: extractVerdict(audit),
       topRisk: extractTopRisk(audit),
+      discovery,
     };
   } finally {
     fs.rmSync(workDir, { recursive: true, force: true });
