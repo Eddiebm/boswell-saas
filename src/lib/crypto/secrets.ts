@@ -8,7 +8,8 @@ const PREFIX = "enc:v1:";
  * secret to manage; set BOSWELL_ENCRYPTION_KEY to rotate it independently.
  */
 function key(): Buffer {
-  const base = process.env.BOSWELL_ENCRYPTION_KEY ?? process.env.AUTH_SECRET;
+  // `||`, not `??`: an unset GitHub Actions secret arrives as an empty string.
+  const base = process.env.BOSWELL_ENCRYPTION_KEY || process.env.AUTH_SECRET;
   if (!base) throw new Error("AUTH_SECRET (or BOSWELL_ENCRYPTION_KEY) must be set to store credentials");
   return Buffer.from(hkdfSync("sha256", base, "boswell", "credentials-v1", 32));
 }

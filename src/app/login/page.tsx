@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { signIn } from "@/lib/auth";
 import { Button, Card } from "@/components/ui";
 
@@ -40,6 +41,17 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         {!hasOAuth ? (
           <p className="mt-8 text-sm text-red-400">Sign-in is not configured yet.</p>
         ) : null}
+        <p className="mt-6 text-xs text-zinc-500">
+          By continuing you agree to the{" "}
+          <Link href="/terms" className="underline">
+            terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="underline">
+            privacy policy
+          </Link>
+          .
+        </p>
       </Card>
     </div>
   );

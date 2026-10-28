@@ -54,6 +54,10 @@ setSecret(
   env.BOSWELL_ENGINE_GIT_URL || "git+https://github.com/Eddiebm/boswell.git",
 );
 
+// The worker decrypts stored credentials with the same key as the web app.
+setSecret("AUTH_SECRET", env.AUTH_SECRET);
+setSecret("BOSWELL_ENCRYPTION_KEY", env.BOSWELL_ENCRYPTION_KEY);
+
 setSecret("ADMIN_ALERT_EMAIL", env.ADMIN_ALERT_EMAIL);
 setSecret("RESEND_API_KEY", env.RESEND_API_KEY);
 setSecret("ALERT_FROM_EMAIL", env.ALERT_FROM_EMAIL || "Boswell <onboarding@resend.dev>");
