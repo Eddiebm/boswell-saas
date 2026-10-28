@@ -1,0 +1,217 @@
+import fs from "node:fs";
+import path from "node:path";
+import { collectRepoFiles } from "@/lib/checks/collect-files";
+import { checkEnvVars } from "@/lib/checks/env-vars";
+import { checkIntegrations } from "@/lib/checks/integrations";
+import { checkLockfileDrift } from "@/lib/checks/lockfile-drift";
+import {
+  diffLockfiles,
+  gitBlobSha,
+  runIsolatedNpmAudit,
+  summarizeBlockers,
+  triageAudit,
+  type AuditCounts,
+  type NpmExec,
+  type PackageChange,
+  type PinBump,
+} from "@/lib/checks/npm-audit";
+import { checkOutbound } from "@/lib/checks/outbound";
+import { checkRefreshWipe } from "@/lib/checks/refresh-wipe";
+import { checkSecretExposure } from "@/lib/checks/secrets";
+import type { CheckFinding, RepoFile } from "@/lib/checks/types";
+
+export { annotateSiblings } from "@/lib/checks/siblings";
+export type { CheckFinding } from "@/lib/checks/types";
+
+/** A lockfile Boswell patched in isolation, ready to become a fix PR. */
+export type DependencyFix = {
+  lockfilePath: string;
+  baseLockfileBlobSha: string;
+  patchedLockfile: string;
+  packageJsonPath: string;
+  basePackageJsonBlobSha: string;
+  /** Set only when a direct dependency's pin had to be raised to reach a non-breaking fix. */
+  patchedPackageJson: string | null;
+  pinBumps: PinBump[];
+  changes: PackageChange[];
+  beforeCounts: AuditCounts | null;
+  afterCounts: AuditCounts | null;
+};
+
+export type RepoCheckResult = { findings: CheckFinding[]; dependencyFixes: DependencyFix[]; files: RepoFile[] };
+
+const OTHER_LOCKFILES = ["yarn.lock", "pnpm-lock.yaml", "bun.lockb", "bun.lock"];
+const NOT_A_PROJECT = /(^|\/)(examples?|fixtures?|__tests__|tests?|templates?|demo)\//;
+const MAX_PROJECTS = 5;
+/** Total wall-clock budget for npm across all projects, so a slow registry can't push the worker past its timeout. */
+const DEPENDENCY_AUDIT_BUDGET_MS = 5 * 60_000;
+
+/**
+ * Workspaces and local `file:`/`link:` dependencies point at folders that don't
+ * exist in the isolated copy, so `audit fix` there could drop them from the
+ * lockfile. Those projects are audited but not patched.
+ */
+function canPatchInIsolation(packageJson: string): boolean {
+  try {
+    const pkg = JSON.parse(packageJson) as Record<string, unknown>;
+    if (pkg.workspaces) return false;
+    const specs = ["dependencies", "devDependencies", "optionalDependencies"].flatMap((field) =>
+      Object.values((pkg[field] as Record<string, string> | undefined) ?? {}),
+    );
+    return !specs.some((spec) => /^(?:file|link|workspace|portal):/.test(spec));
+  } catch {
+    return false;
+  }
+}
+
+/** Last line of defence before a patch can become a PR: it must parse and still match its package.json. */
+function isSoundPatch(packageJson: string, lockfile: string, dir: string): boolean {
+  try {
+    JSON.parse(lockfile);
+  } catch {
+    return false;
+  }
+  return checkLockfileDrift({ dir, packageJson, lockfile, otherLockfiles: [] }).length === 0;
+}
+
+function lockfilesAbove(repoDir: string, dir: string): string[] {
+  const found: string[] = [];
+  let current = dir;
+  for (;;) {
+    for (const name of [...OTHER_LOCKFILES, "package-lock.json"]) {
+      if (fs.existsSync(path.join(repoDir, current, name))) found.push(name);
+    }
+    if (current === "" || found.length) return found;
+    current = path.posix.dirname(current) === "." ? "" : path.posix.dirname(current);
+  }
+}
+
+function safely(name: string, run: () => CheckFinding[]): CheckFinding[] {
+  try {
+    return run();
+  } catch (error) {
+    console.error(`[checks] ${name} failed`, error);
+    return [];
+  }
+}
+
+/**
+ * Boswell's own deterministic and pattern-based checks, run on the cloned
+ * repo after the engine. Nothing here executes the repository's code: files
+ * are only read, and npm only ever sees copies of package.json and
+ * package-lock.json in an isolated directory (see runIsolatedNpmAudit).
+ */
+export async function runRepoChecks(
+  repoDir: string,
+  options: { dependencyAudit?: boolean; exec?: NpmExec } = {},
+): Promise<RepoCheckResult> {
+  const files = collectRepoFiles(repoDir);
+  const deadline = Date.now() + DEPENDENCY_AUDIT_BUDGET_MS;
+  const findings: CheckFinding[] = [];
+  const dependencyFixes: DependencyFix[] = [];
+
+  const projects = files
+    .filter((f) => path.posix.basename(f.path) === "package.json" && !NOT_A_PROJECT.test(f.path))
+    .slice(0, MAX_PROJECTS);
+
+  for (const pkgFile of projects) {
+    const dir = path.posix.dirname(pkgFile.path) === "." ? "" : path.posix.dirname(pkgFile.path);
+    const lockPath = path.posix.join(dir, "package-lock.json");
+    const lockAbs = path.join(repoDir, lockPath);
+    const lockBuf = fs.existsSync(lockAbs) ? fs.readFileSync(lockAbs) : null;
+    const lockfile = lockBuf ? lockBuf.toString("utf8") : null;
+
+    findings.push(
+      ...safely("lockfile-drift", () =>
+        checkLockfileDrift({ dir, packageJson: pkgFile.content, lockfile, otherLockfiles: lockfile ? [] : lockfilesAbove(repoDir, dir) }),
+      ),
+    );
+
+    if (!lockfile || !lockBuf || options.dependencyAudit === false) continue;
+    try {
+      JSON.parse(lockfile);
+    } catch {
+      continue; // reported by the drift check
+    }
+
+    if (Date.now() > deadline) {
+      findings.push({
+        severity: "INFO",
+        category: "dependencies",
+        title: "Dependency audit skipped: time budget used up",
+        description: `Boswell audited the first projects in this repo and ran out of time before ${lockPath}.`,
+        filePath: lockPath,
+        recommendation: "Run `npm audit` in this directory locally.",
+        confidence: 1,
+      });
+      continue;
+    }
+
+    const patchable = canPatchInIsolation(pkgFile.content);
+    const result = await runIsolatedNpmAudit({ packageJson: pkgFile.content, lockfile, fix: patchable }, options.exec).catch(
+      (error: unknown) => ({ ok: false as const, error: error instanceof Error ? error.message : String(error) }),
+    );
+    if (!result.ok) {
+      findings.push({
+        severity: "INFO",
+        category: "dependencies",
+        title: "Dependency audit couldn't run",
+        description: `Boswell couldn't audit ${lockPath}: ${result.error.slice(0, 300)}`,
+        filePath: lockPath,
+        recommendation: "Run `npm audit` locally to check for vulnerable dependencies.",
+        confidence: 1,
+      });
+      continue;
+    }
+
+    const patched =
+      Boolean(result.patchedLockfile || result.patchedPackageJson) &&
+      isSoundPatch(result.patchedPackageJson ?? pkgFile.content, result.patchedLockfile ?? lockfile, dir);
+    findings.push(
+      ...safely("npm-audit", () =>
+        triageAudit({ report: result.before, lockfile, lockfilePath: lockPath, afterFix: patched ? result.after : undefined }),
+      ),
+    );
+    findings.push(...safely("blockers", () => summarizeBlockers(
+          patched
+            ? { report: result.after ?? result.before, lockfile: result.patchedLockfile ?? lockfile, packageJsonPath: pkgFile.path }
+            : { report: result.before, lockfile, packageJsonPath: pkgFile.path },
+        )));
+
+    if (result.fixError) {
+      findings.push({
+        severity: "INFO",
+        category: "dependencies",
+        title: "Boswell couldn't prepare a dependency fix for this lockfile",
+        description: `\`npm audit fix\` failed on ${lockPath}: ${result.fixError.slice(0, 300)}`,
+        filePath: lockPath,
+        recommendation: "Run `npm audit fix` locally with npm 11 or newer and commit the updated lockfile.",
+        confidence: 1,
+      });
+    }
+
+    if (patched) {
+      const patchedLockfile = result.patchedLockfile ?? lockfile;
+      dependencyFixes.push({
+        lockfilePath: lockPath,
+        baseLockfileBlobSha: gitBlobSha(lockBuf),
+        patchedLockfile,
+        packageJsonPath: pkgFile.path,
+        basePackageJsonBlobSha: gitBlobSha(fs.readFileSync(path.join(repoDir, pkgFile.path))),
+        patchedPackageJson: result.patchedPackageJson ?? null,
+        pinBumps: result.pinBumps,
+        changes: diffLockfiles(lockfile, patchedLockfile),
+        beforeCounts: result.before.metadata?.vulnerabilities ?? null,
+        afterCounts: result.after?.metadata?.vulnerabilities ?? null,
+      });
+    }
+  }
+
+  findings.push(...safely("integrations", () => checkIntegrations(files)));
+  findings.push(...safely("env-vars", () => checkEnvVars(files)));
+  findings.push(...safely("outbound", () => checkOutbound(files)));
+  findings.push(...safely("secrets", () => checkSecretExposure(files)));
+  findings.push(...safely("refresh-wipe", () => checkRefreshWipe(files)));
+
+  return { findings, dependencyFixes, files };
+}

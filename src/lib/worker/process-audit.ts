@@ -4,6 +4,7 @@ import type { ScoreInput } from "@/lib/scoring/types";
 import type { AuditMode } from "@/lib/audit-modes";
 import { normalizeAuditMode } from "@/lib/audit-modes";
 import { installBoswellEngine, runBoswellEngine } from "@/lib/worker/boswell-engine";
+import { annotateSiblings, runRepoChecks, type DependencyFix } from "@/lib/checks";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -19,11 +20,15 @@ export type ProcessedFinding = {
   filePath?: string;
   lineStart?: number;
   recommendation?: string;
+  /** Set by Boswell's own repo checks; engine findings use the default. */
+  confidence?: number;
 };
 
 export type ProcessAuditResult = {
   documents: Record<string, string>;
   findings: ProcessedFinding[];
+  dependencyFixes: DependencyFix[];
+  commitSha?: string;
   stack: string[];
   slop: SlopResult;
   scoreInput: ScoreInput;
@@ -150,7 +155,7 @@ export async function processAuditJob(input: {
       filePath: f.filePath,
       lineStart: f.lineStart,
     }));
-    const merged = [...leakFindings, ...auditFindings].slice(0, 100).map((f) => ({
+    const merged: ProcessedFinding[] = [...leakFindings, ...auditFindings].slice(0, 100).map((f) => ({
       severity: f.severity,
       category: f.category,
       title: f.title,
@@ -160,12 +165,35 @@ export async function processAuditJob(input: {
       recommendation: "recommendation" in f ? (f as { recommendation?: string }).recommendation : undefined,
     }));
 
+    // Boswell's own checks only read files; npm runs on copies of package.json/package-lock.json in an
+    // isolated directory. A failure here must never fail the audit itself.
+    let allFindings: ProcessedFinding[] = merged;
+    let checked: ProcessedFinding[] = [];
+    let dependencyFixes: DependencyFix[] = [];
+    try {
+      const checks = await runRepoChecks(repoDir, { dependencyAudit: process.env.BOSWELL_DEPENDENCY_AUDIT !== "0" });
+      allFindings = annotateSiblings<ProcessedFinding>([...merged, ...checks.findings], checks.files);
+      checked = allFindings.slice(merged.length);
+      dependencyFixes = checks.dependencyFixes;
+    } catch (error) {
+      console.error("[worker] repo checks failed", error);
+    }
+    const commitSha = (() => {
+      try {
+        return execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir, stdio: "pipe" }).toString().trim();
+      } catch {
+        return undefined;
+      }
+    })();
+
     const slopFiles = walkSourceFiles(repoDir).slice(0, 200);
     const slop = scanAiSlop({ files: slopFiles });
 
-    const critical = merged.filter((f) => f.severity === "CRITICAL").length;
-    const high = merged.filter((f) => f.severity === "HIGH").length;
-    const medium = merged.filter((f) => f.severity === "MEDIUM").length;
+    // Pattern-based "needs review" findings don't move the score until someone confirms them.
+    const scored = [...merged, ...checked.filter((f) => (f.confidence ?? 0) >= 0.8)];
+    const critical = scored.filter((f) => f.severity === "CRITICAL").length;
+    const high = scored.filter((f) => f.severity === "HIGH").length;
+    const medium = scored.filter((f) => f.severity === "MEDIUM").length;
 
     const scoreInput: ScoreInput = {
       criticalFindings: critical,
@@ -195,7 +223,9 @@ export async function processAuditJob(input: {
         "handoff-simple": handoffSimple,
         lessons,
       },
-      findings: merged,
+      findings: allFindings,
+      dependencyFixes,
+      commitSha,
       stack,
       slop,
       scoreInput,

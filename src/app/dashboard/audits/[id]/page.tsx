@@ -1,13 +1,14 @@
 export const dynamic = "force-dynamic";
 
 import { notFound } from "next/navigation";
-import { getAuditReport } from "@/lib/data";
+import { getAuditReport, getDependencyFixesForAudit } from "@/lib/data";
 import type { CoachingSections } from "@/lib/coaching/build-coaching";
 import { auditModeLabel } from "@/lib/audit-modes";
 import { AuditPoller } from "@/components/audit-poller";
 import { AuditStatusBadge } from "@/components/audit-status-badge";
 import { AuditWaitIndicator } from "@/components/audit-wait-indicator";
 import { OwaspTop10Card } from "@/components/owasp-top10-card";
+import { DependencyFixCard } from "@/components/dependency-fix-card";
 import { CopyFixPromptButton } from "@/components/copy-fix-prompt-button";
 import { MarkdownViewer } from "@/components/markdown-viewer";
 import { CoachingCard } from "@/components/coaching-card";
@@ -22,6 +23,7 @@ export default async function AuditDetailPage({ params }: Params) {
   const { id } = await params;
   const report = await getAuditReport(userId, id);
   if (!report) notFound();
+  const dependencyFixes = report.status === "completed" ? await getDependencyFixesForAudit(userId, id) : [];
 
   const isPending = report.status === "queued" || report.status === "running";
 
@@ -117,6 +119,10 @@ export default async function AuditDetailPage({ params }: Params) {
               <MarkdownViewer content={report.consumerSummary} />
             </Card>
           </section>
+
+          {dependencyFixes.map((fix) => (
+            <DependencyFixCard key={fix.id} fix={fix} />
+          ))}
 
           <OwaspTop10Card summary={report.owaspSummary} />
 
