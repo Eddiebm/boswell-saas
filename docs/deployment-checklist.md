@@ -32,6 +32,17 @@ Optional on Vercel: `OPENROUTER_API_KEY` (enables Pro+ LLM answers in Engineerin
 
 On the **worker** (required for live audits): `OPENROUTER_API_KEY`, `BOSWELL_ENGINE_GIT_URL`, and the same `AUTH_SECRET` (or `BOSWELL_ENCRYPTION_KEY`) as Vercel — the worker decrypts stored test-account passwords and provider tokens with it.
 
+### Error monitoring (Sentry)
+
+Everything is off until the DSN is set; nothing else is needed to deploy.
+
+1. Create a project at sentry.io with the **Next.js** platform and copy its DSN.
+2. **Vercel** (Production, optionally Preview): `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` — the same DSN for both. Redeploy: the browser DSN is built into the bundle.
+3. **GitHub Actions secret** `SENTRY_DSN` (same value): reports failed audits, push-guard runs and verification runs from the worker, tagged `component` and `runId`. Worker events use the environment `worker-production`.
+4. Optional, for readable browser stack traces — **Vercel**: `SENTRY_AUTH_TOKEN` (Sentry → Settings → Auth Tokens, scope `project:releases`), `SENTRY_ORG`, `SENTRY_PROJECT`. The build then uploads source maps and deletes them from the output, so they're never served to visitors.
+
+What's sent: the error and its stack trace. Request headers, cookies, bodies, query strings, local variables, database queries, user info and repository names are not (`src/lib/monitoring-config.ts`).
+
 **GitHub OAuth app:** add callback  
 `https://YOUR_VERCEL_DOMAIN/api/auth/callback/github`
 

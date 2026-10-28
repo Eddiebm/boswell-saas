@@ -57,6 +57,7 @@ setSecret(
 // The worker decrypts stored credentials with the same key as the web app.
 setSecret("AUTH_SECRET", env.AUTH_SECRET);
 setSecret("BOSWELL_ENCRYPTION_KEY", env.BOSWELL_ENCRYPTION_KEY);
+setSecret("SENTRY_DSN", env.SENTRY_DSN);
 
 setSecret("ADMIN_ALERT_EMAIL", env.ADMIN_ALERT_EMAIL);
 setSecret("RESEND_API_KEY", env.RESEND_API_KEY);

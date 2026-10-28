@@ -4,6 +4,8 @@ import { requireDb } from "@/lib/db";
 import { auditRuns, repositories } from "@/lib/db/schema";
 import { completeGuardRun, postStatus } from "@/lib/guard/service";
 import { processGuardJob } from "@/lib/worker/process-guard";
+import { reportError } from "@/lib/monitoring";
+import { redactSecrets } from "@/lib/monitoring-config";
 
 /** Worker entry point for a push-guard run (see runQueuedAudit). */
 export async function runGuardAudit(run: typeof auditRuns.$inferSelect, repo: typeof repositories.$inferSelect, token: string) {
@@ -13,7 +15,8 @@ export async function runGuardAudit(run: typeof auditRuns.$inferSelect, repo: ty
     await completeGuardRun({ run, repo, gh, result });
     return { ok: true as const };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Guard check failed";
+    reportError(error, { component: "guard", runId: run.id });
+    const message = redactSecrets(error instanceof Error ? error.message : "Guard check failed");
     const db = requireDb();
     await db.update(auditRuns).set({ status: "failed", finishedAt: new Date(), error: message }).where(eq(auditRuns.id, run.id));
     // Don't leave the commit showing "pending" forever.

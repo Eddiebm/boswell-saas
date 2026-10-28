@@ -1,6 +1,9 @@
 import http from "node:http";
 import { processWorkerTick } from "../src/lib/audits";
 import { processVerifyWorkerTick } from "../src/lib/dynamic-verify/run";
+import { initWorkerMonitoring, reportError } from "../src/lib/monitoring";
+
+initWorkerMonitoring();
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -46,6 +49,7 @@ async function main() {
       await sleep(5000);
     } catch (error) {
       console.error("Worker tick failed", error);
+      reportError(error, { component: "worker" });
       await sleep(5000);
     }
   }

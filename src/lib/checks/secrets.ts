@@ -44,7 +44,7 @@ export function findSecretTables(files: RepoFile[]): SecretTable[] {
  */
 function rowReachesResponse(content: string, hit: number): boolean {
   const before = content.slice(Math.max(0, hit - 160), hit);
-  const assigned = /(?:const|let|var)\s+(?:\[\s*(\w+)[^\]]*\]|(\w+))\s*(?::[^=]+)?=\s*(?:await\s+)?[\w.]*$/.exec(before);
+  const assigned = /(?:const|let|var)\s+(?:\[\s*(\w+)[^\]]*\]|(\w+))\s*(?::[^=]+)?=\s*(?:await\s+)?[\w.\s]*$/.exec(before);
   if (!assigned) return true; // used inline, e.g. `json(await prisma.user.findMany())`
   const v = escapeRegExp(assigned[1] ?? assigned[2]);
   return new RegExp(String.raw`\b(?:json|send)\s*\(\s*(?:${v}\s*[,)]|[^)]*?\.\.\.\s*${v}\b|\{(?:[^)]*?,)?\s*${v}\s*[,}]|\{[^)]*?:\s*${v}\s*[,}])`).test(content.slice(hit));

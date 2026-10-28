@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 /** Baseline browser protections for every route. */
 const securityHeaders = [
@@ -16,4 +17,19 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+/**
+ * With SENTRY_AUTH_TOKEN set (plus SENTRY_ORG and SENTRY_PROJECT), the build
+ * uploads browser source maps to Sentry so errors show readable code, then
+ * deletes them from the output: they're never served to visitors. Without
+ * the token the build is untouched.
+ */
+export default process.env.SENTRY_AUTH_TOKEN
+  ? withSentryConfig(nextConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      sourcemaps: { deleteSourcemapsAfterUpload: true },
+      silent: !process.env.CI,
+      telemetry: false,
+    })
+  : nextConfig;

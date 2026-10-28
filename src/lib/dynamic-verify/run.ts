@@ -8,6 +8,8 @@ import type { DiscoveryResult } from "@/lib/dynamic-verify/discover";
 import { isDemoMode } from "@/lib/demo/mode";
 import { demoDiscovery, demoVerifyRuns, demoVerifyTargets, DEMO_VERIFY_TARGET_ID } from "@/lib/demo/data";
 import { assertRelativePath, assertSafeStagingUrl } from "@/lib/dynamic-verify/validate-target";
+import { reportError } from "@/lib/monitoring";
+import { redactSecrets } from "@/lib/monitoring-config";
 
 const QUEUED_TIMEOUT_MS = 60 * 60 * 1000;
 const RUNNING_TIMEOUT_MS = 10 * 60 * 1000;
@@ -300,7 +302,8 @@ export async function runQueuedVerifyRun(runId: string) {
 
     return { ok: true, result: outcome.result };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Verification run failed";
+    reportError(error, { component: "verify", runId });
+    const message = redactSecrets(error instanceof Error ? error.message : "Verification run failed");
     await db
       .update(verifyRuns)
       .set({ status: "failed", error: message, finishedAt: new Date() })

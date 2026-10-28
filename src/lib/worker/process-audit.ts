@@ -12,6 +12,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { reportError } from "@/lib/monitoring";
 
 type Severity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
 
@@ -191,6 +192,7 @@ export async function processAuditJob(input: {
           checks.summary.coverage.smoke = live.coverage.smoke;
         } catch (error) {
           console.error("[worker] live checks failed", error);
+          reportError(error, { component: "live-checks" });
           checks.summary.coverage.liveSite = "unverifiable";
           checks.summary.coverage.smoke = "unverifiable";
         }
@@ -206,6 +208,7 @@ export async function processAuditJob(input: {
       checksSummary = checks.summary;
     } catch (error) {
       console.error("[worker] repo checks failed", error);
+      reportError(error, { component: "repo-checks" });
     }
     const commitSha = (() => {
       try {

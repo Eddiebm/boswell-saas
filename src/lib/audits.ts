@@ -35,6 +35,8 @@ import { processAuditJob } from "@/lib/worker/process-audit";
 import { runGuardAudit } from "@/lib/guard/run";
 import { sendAuditAlert } from "@/lib/alerts/audit-alerts";
 import { triggerAuditWorkerDispatch } from "@/lib/worker/trigger-worker";
+import { reportError } from "@/lib/monitoring";
+import { redactSecrets } from "@/lib/monitoring-config";
 
 export async function listAuditsForUser(userId: string) {
   const db = requireDb();
@@ -619,7 +621,9 @@ export async function runQueuedAudit(auditId: string) {
     await incrementAuditUsage(run.userId);
     return { ok: true as const };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Audit failed";
+    reportError(error, { component: "audit", runId: run.id });
+    // Stored, emailed and shown to the user: a failed clone's message contains the token-bearing URL.
+    const message = redactSecrets(error instanceof Error ? error.message : "Audit failed");
     await db
       .update(auditRuns)
       .set({
