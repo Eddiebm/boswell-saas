@@ -35,6 +35,17 @@ describe("credential encryption", () => {
     expect(() => decryptSecret(stored)).toThrow(/AUTH_SECRET/);
   });
 
+  it("treats an empty BOSWELL_ENCRYPTION_KEY (an unset CI secret) as unset", () => {
+    const stored = encryptSecret("secret");
+    process.env.BOSWELL_ENCRYPTION_KEY = "";
+    expect(decryptSecret(stored)).toBe("secret");
+  });
+
+  it("the cloud worker gets the key it needs to decrypt", () => {
+    const workflow = fs.readFileSync(path.join(process.cwd(), ".github/workflows/audit-worker.yml"), "utf8");
+    expect(workflow).toContain("AUTH_SECRET: ${{ secrets.AUTH_SECRET }}");
+  });
+
   it("live verification stores test-account passwords encrypted", () => {
     const run = fs.readFileSync(path.join(process.cwd(), "src/lib/dynamic-verify/run.ts"), "utf8");
     expect(run).toContain("accountAPassword: encryptSecret(input.accountAPassword)");
