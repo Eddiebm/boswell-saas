@@ -1,3 +1,4 @@
+import { decryptSecret, encryptSecret } from "@/lib/crypto/secrets";
 import { and, desc, eq, lt } from "drizzle-orm";
 import { requireDb } from "@/lib/db";
 import { fixQueueItems, memoryEvents, repositories, users, verifyRuns, verifyTargets } from "@/lib/db/schema";
@@ -83,9 +84,9 @@ export async function createVerifyTarget(
       stagingUrl: input.stagingUrl,
       loginPath: input.loginPath,
       accountAEmail: input.accountAEmail,
-      accountAPassword: input.accountAPassword,
+      accountAPassword: encryptSecret(input.accountAPassword),
       accountBEmail: input.accountBEmail,
-      accountBPassword: input.accountBPassword,
+      accountBPassword: encryptSecret(input.accountBPassword),
       resourcePathTemplate: input.resourcePathTemplate,
       accountAResourceId: input.accountAResourceId,
       consentConfirmedAt: new Date(),
@@ -267,18 +268,18 @@ export async function runQueuedVerifyRun(runId: string) {
   const [target] = await db.select().from(verifyTargets).where(eq(verifyTargets.id, run.targetId)).limit(1);
   if (!target) throw new Error("Verification target not found");
 
-  const config: VerifyTargetConfig = {
-    stagingUrl: target.stagingUrl,
-    loginPath: target.loginPath,
-    accountAEmail: target.accountAEmail,
-    accountAPassword: target.accountAPassword,
-    accountBEmail: target.accountBEmail,
-    accountBPassword: target.accountBPassword,
-    resourcePathTemplate: target.resourcePathTemplate,
-    accountAResourceId: target.accountAResourceId,
-  };
-
   try {
+    // Inside the try: an undecryptable credential should fail the run visibly, not leave it queued.
+    const config: VerifyTargetConfig = {
+      stagingUrl: target.stagingUrl,
+      loginPath: target.loginPath,
+      accountAEmail: target.accountAEmail,
+      accountAPassword: decryptSecret(target.accountAPassword),
+      accountBEmail: target.accountBEmail,
+      accountBPassword: decryptSecret(target.accountBPassword),
+      resourcePathTemplate: target.resourcePathTemplate,
+      accountAResourceId: target.accountAResourceId,
+    };
     const outcome = await runAccessControlCheck(config);
 
     await db
