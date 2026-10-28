@@ -1,4 +1,5 @@
 import { processWorkerTick, recoverStaleAudits } from "../src/lib/audits";
+import { processVerifyWorkerTick } from "../src/lib/dynamic-verify/run";
 
 async function main() {
   await recoverStaleAudits();
@@ -14,7 +15,21 @@ async function main() {
     );
     process.exit(result.ok ? 0 : 1);
   }
-  console.log(JSON.stringify({ processed: false, message: "No queued audits" }));
+
+  const verifyResult = await processVerifyWorkerTick();
+  if (verifyResult.processed && "runId" in verifyResult) {
+    console.log(
+      JSON.stringify({
+        processed: true,
+        runId: verifyResult.runId,
+        ok: verifyResult.ok,
+        error: "error" in verifyResult ? verifyResult.error : undefined,
+      }),
+    );
+    process.exit(verifyResult.ok ? 0 : 1);
+  }
+
+  console.log(JSON.stringify({ processed: false, message: "No queued audits or verification runs" }));
 }
 
 main().catch((error) => {

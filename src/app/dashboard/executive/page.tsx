@@ -14,14 +14,21 @@ import { requireUserId } from "@/lib/session";
 import { requireDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { isDemoMode } from "@/lib/demo/mode";
 import { canUseExecutiveDashboard, type PlanId } from "@/lib/plans";
 import { UpgradeButton } from "@/components/upgrade-button";
 
 export default async function ExecutivePage() {
   const userId = await requireUserId();
-  const db = requireDb();
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  const plan = (user?.plan ?? "free") as PlanId;
+  let plan: PlanId = "free";
+  if (isDemoMode()) {
+    // Demo mode showcases every plan tier's features, same as the brain/verify pages.
+    plan = "pro";
+  } else {
+    const db = requireDb();
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    plan = (user?.plan ?? "free") as PlanId;
+  }
 
   if (!canUseExecutiveDashboard(plan)) {
     return (

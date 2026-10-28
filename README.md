@@ -19,6 +19,7 @@ Boswell watches your repositories, understands what changed, remembers engineeri
 | Repo health checks (lockfile drift, vulnerable deps, unconnected integrations, env vars, SSRF/timeouts, secret exposure, data-wiping refreshes, copied bugs) | **Live** — see [docs/repo-checks.md](docs/repo-checks.md) |
 | Dependency fix PR (non-breaking `npm audit fix`, lockfile only) | **Live on Pro** |
 | GitHub OAuth + audits | **Live** (requires env) |
+| Live access-control verification | **Beta** (Pro, staging targets only) |
 | Stripe billing | **Free + Pro** (requires env) |
 | Demo mode | **Explicit only** (`BOSWELL_DEMO=1`) |
 
@@ -84,6 +85,7 @@ See `docs/` for architecture, deployment, scoring methodology, and safety policy
 - `/dashboard/fix-queue` — Prioritized work
 - `/dashboard/memory` — Engineering memory
 - `/dashboard/brain` — Q&A
+- `/dashboard/verify` — Live access-control verification (beta, Pro)
 - `/dashboard/settings` — Config
 - `/dashboard/billing` — Plans
 - `/dashboard/admin` — System health

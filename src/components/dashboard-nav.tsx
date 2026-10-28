@@ -17,6 +17,7 @@ const moreLinks = [
   { href: "/dashboard/fix-queue", label: "Fix queue" },
   { href: "/dashboard/memory", label: "Engineering memory" },
   { href: "/dashboard/brain", label: "Engineering brain" },
+  { href: "/dashboard/verify", label: "Live verification" },
   { href: "/dashboard/billing", label: "Billing" },
   { href: "/dashboard/settings", label: "Settings" },
   { href: "/dashboard/admin", label: "System status" },
