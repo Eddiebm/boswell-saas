@@ -152,6 +152,11 @@ describe("git history secrets", () => {
     expect(findings[0].description).not.toContain(stripeLive);
   });
 
+  it("ignores committed dependencies and build output", async () => {
+    const vendored = async () => ["commit:ccccccc3333333 2026-05-10", "+++ b/node_modules/stripe-fixture/index.js", `+const k = "${stripeLive}";`, "+++ b/dist/app.min.js", `+var k="${stripeLive}";`].join("\n");
+    expect(await checkGitHistorySecrets("/repo", [], vendored)).toEqual([]);
+  });
+
   it("doesn't repeat a key that's still in the code (the current-code scan reports it)", async () => {
     const files: RepoFile[] = [{ path: "lib/pay.ts", content: `new Stripe("${stripeLive}")` }];
     expect(await checkGitHistorySecrets("/repo", files, gitLogWith(stripeLive))).toEqual([]);
