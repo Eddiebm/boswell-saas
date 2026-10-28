@@ -5,7 +5,7 @@ import type { ScoreInput } from "@/lib/scoring/types";
 import type { AuditMode } from "@/lib/audit-modes";
 import { normalizeAuditMode } from "@/lib/audit-modes";
 import { installBoswellEngine, runBoswellEngine } from "@/lib/worker/boswell-engine";
-import { annotateSiblings, runRepoChecks, type DependencyFix } from "@/lib/checks";
+import { annotateSiblings, runRepoChecks, type ChecksSummary, type DependencyFix } from "@/lib/checks";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -23,12 +23,14 @@ export type ProcessedFinding = {
   recommendation?: string;
   /** Set by Boswell's own repo checks; engine findings use the default. */
   confidence?: number;
+  ruleId?: string;
 };
 
 export type ProcessAuditResult = {
   documents: Record<string, string>;
   findings: ProcessedFinding[];
   dependencyFixes: DependencyFix[];
+  checksSummary: ChecksSummary | null;
   commitSha?: string;
   stack: string[];
   slop: SlopResult;
@@ -172,11 +174,13 @@ export async function processAuditJob(input: {
     let allFindings: ProcessedFinding[] = merged;
     let checked: ProcessedFinding[] = [];
     let dependencyFixes: DependencyFix[] = [];
+    let checksSummary: ChecksSummary | null = null;
     try {
       const checks = await runRepoChecks(repoDir, { dependencyAudit: process.env.BOSWELL_DEPENDENCY_AUDIT !== "0" });
       allFindings = annotateSiblings<ProcessedFinding>([...merged, ...checks.findings], checks.files);
       checked = allFindings.slice(merged.length);
       dependencyFixes = checks.dependencyFixes;
+      checksSummary = checks.summary;
     } catch (error) {
       console.error("[worker] repo checks failed", error);
     }
@@ -228,6 +232,7 @@ export async function processAuditJob(input: {
       },
       findings: allFindings,
       dependencyFixes,
+      checksSummary,
       commitSha,
       stack,
       slop,

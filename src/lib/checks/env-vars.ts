@@ -53,6 +53,7 @@ export function checkEnvVars(files: RepoFile[]): CheckFinding[] {
   const noExample = examples.length === 0;
   return [
     {
+      ruleId: "deploy.env-undocumented",
       severity: noExample && missing.length >= 3 ? "MEDIUM" : "LOW",
       category: "deploy",
       title: noExample

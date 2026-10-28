@@ -315,6 +315,7 @@ export function triageAudit(input: {
     ];
 
     out.push({
+      ruleId: "deps.vulnerable",
       severity,
       category: "dependencies",
       title: `Vulnerable dependency: ${label}`,
@@ -385,6 +386,7 @@ export function summarizeBlockers(input: { report: NpmAuditReport; lockfile: str
     const pkgs = [...info.packages].sort();
     const self = pkgs.length === 1 && pkgs[0] === parent;
     return {
+      ruleId: "deps.upgrade-blocker",
       severity: info.worst === "CRITICAL" ? "HIGH" : info.worst === "HIGH" ? "MEDIUM" : "LOW",
       category: "deploy",
       title: `Upgrading \`${parent}\` to ${info.version} is blocking ${self ? "its own security fix" : `${pkgs.length} security ${pkgs.length === 1 ? "fix" : "fixes"}`}`,

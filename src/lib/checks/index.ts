@@ -18,6 +18,10 @@ import {
 import { checkOutbound } from "@/lib/checks/outbound";
 import { checkRefreshWipe } from "@/lib/checks/refresh-wipe";
 import { checkSecretExposure } from "@/lib/checks/secrets";
+import { checkHardcodedSecrets } from "@/lib/checks/hardcoded-secrets";
+import { checkDatabaseRules } from "@/lib/checks/database-rules";
+import { checkMoney } from "@/lib/checks/money";
+import { checkLaunchBasics, type StackFacts } from "@/lib/checks/launch-basics";
 import type { CheckFinding, RepoFile } from "@/lib/checks/types";
 
 export { annotateSiblings } from "@/lib/checks/siblings";
@@ -38,7 +42,19 @@ export type DependencyFix = {
   afterCounts: AuditCounts | null;
 };
 
-export type RepoCheckResult = { findings: CheckFinding[]; dependencyFixes: DependencyFix[]; files: RepoFile[] };
+export type Coverage = "checked" | "unverifiable" | "not-applicable";
+
+/**
+ * What the checks were able to look at, saved with the audit. A clean result
+ * only counts as a pass on Ship Ready when the check actually ran.
+ */
+export type ChecksSummary = {
+  version: 1;
+  coverage: { dependencies: Coverage; databaseRules: Coverage };
+  facts: StackFacts | null;
+};
+
+export type RepoCheckResult = { findings: CheckFinding[]; dependencyFixes: DependencyFix[]; files: RepoFile[]; summary: ChecksSummary };
 
 const OTHER_LOCKFILES = ["yarn.lock", "pnpm-lock.yaml", "bun.lockb", "bun.lock"];
 const NOT_A_PROJECT = /(^|\/)(examples?|fixtures?|__tests__|tests?|templates?|demo)\//;
@@ -106,6 +122,7 @@ export async function runRepoChecks(
   options: { dependencyAudit?: boolean; exec?: NpmExec } = {},
 ): Promise<RepoCheckResult> {
   const files = collectRepoFiles(repoDir);
+  let audited = 0;
   const deadline = Date.now() + DEPENDENCY_AUDIT_BUDGET_MS;
   const findings: CheckFinding[] = [];
   const dependencyFixes: DependencyFix[] = [];
@@ -136,6 +153,7 @@ export async function runRepoChecks(
 
     if (Date.now() > deadline) {
       findings.push({
+        ruleId: "deps.audit-unavailable",
         severity: "INFO",
         category: "dependencies",
         title: "Dependency audit skipped: time budget used up",
@@ -153,6 +171,7 @@ export async function runRepoChecks(
     );
     if (!result.ok) {
       findings.push({
+        ruleId: "deps.audit-unavailable",
         severity: "INFO",
         category: "dependencies",
         title: "Dependency audit couldn't run",
@@ -164,6 +183,7 @@ export async function runRepoChecks(
       continue;
     }
 
+    audited++;
     const patched =
       Boolean(result.patchedLockfile || result.patchedPackageJson) &&
       isSoundPatch(result.patchedPackageJson ?? pkgFile.content, result.patchedLockfile ?? lockfile, dir);
@@ -180,6 +200,7 @@ export async function runRepoChecks(
 
     if (result.fixError) {
       findings.push({
+        ruleId: "deps.fix-unavailable",
         severity: "INFO",
         category: "dependencies",
         title: "Boswell couldn't prepare a dependency fix for this lockfile",
@@ -212,6 +233,33 @@ export async function runRepoChecks(
   findings.push(...safely("outbound", () => checkOutbound(files)));
   findings.push(...safely("secrets", () => checkSecretExposure(files)));
   findings.push(...safely("refresh-wipe", () => checkRefreshWipe(files)));
+  findings.push(...safely("hardcoded-secrets", () => checkHardcodedSecrets(files)));
+  findings.push(...safely("money", () => checkMoney(files)));
 
-  return { findings, dependencyFixes, files };
+  let databaseRules: Coverage = "unverifiable";
+  findings.push(
+    ...safely("database-rules", () => {
+      const result = checkDatabaseRules(files);
+      databaseRules = result.coverage;
+      return result.findings;
+    }),
+  );
+  let facts: StackFacts | null = null;
+  findings.push(
+    ...safely("launch-basics", () => {
+      const result = checkLaunchBasics(files);
+      facts = result.facts;
+      return result.findings;
+    }),
+  );
+
+  const summary: ChecksSummary = {
+    version: 1,
+    coverage: {
+      dependencies: projects.length === 0 ? "not-applicable" : audited === projects.length ? "checked" : "unverifiable",
+      databaseRules,
+    },
+    facts,
+  };
+  return { findings, dependencyFixes, files, summary };
 }

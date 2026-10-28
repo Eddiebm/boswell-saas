@@ -71,6 +71,7 @@ export function checkSecretExposure(files: RepoFile[]): CheckFinding[] {
       if (hit === undefined) continue;
 
       out.push({
+        ruleId: "secrets.row-exposure",
         severity: "MEDIUM",
         category: "secrets",
         title: `Route may return \`${t.table}\` rows including ${t.columns.map((c) => `\`${c}\``).join(", ")}`,
@@ -98,6 +99,7 @@ export function checkSecretExposure(files: RepoFile[]): CheckFinding[] {
   }
   for (const [name, at] of publicSecrets) {
     out.push({
+      ruleId: "secrets.public-env",
       severity: "HIGH",
       category: "secrets",
       title: `Secret in a public environment variable: ${name}`,

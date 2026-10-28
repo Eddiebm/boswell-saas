@@ -25,7 +25,8 @@ function importsPackage(content: string, pkg: string) {
 
 type Rule = {
   pkg: string;
-  check: (ctx: { files: RepoFile[]; sources: RepoFile[]; dir: string }) => Omit<CheckFinding, "category" | "confidence"> | null;
+  ruleId: string;
+  check: (ctx: { files: RepoFile[]; sources: RepoFile[]; dir: string }) => Omit<CheckFinding, "ruleId" | "category" | "confidence"> | null;
 };
 
 const INSTRUMENTATION = ["instrumentation.ts", "instrumentation.js", "src/instrumentation.ts", "src/instrumentation.js"];
@@ -37,6 +38,7 @@ const CLIENT_INSTRUMENTATION = [
 const RULES: Rule[] = [
   {
     pkg: "@sentry/nextjs",
+    ruleId: "integrations.error-monitoring",
     check: ({ files, dir }) => {
       const server = exists(files, dir, INSTRUMENTATION);
       const serverWired = server && /sentry/i.test(stripComments(server.content));
@@ -62,6 +64,7 @@ const RULES: Rule[] = [
   },
   ...["@sentry/node", "@sentry/react", "@sentry/browser", "@sentry/remix", "@sentry/sveltekit"].map((pkg): Rule => ({
     pkg,
+    ruleId: "integrations.error-monitoring",
     check: ({ sources }) =>
       sources.some((f) => importsPackage(f.content, pkg) && /\binit\s*\(/.test(f.content))
         ? null
@@ -74,6 +77,7 @@ const RULES: Rule[] = [
   })),
   {
     pkg: "@vercel/analytics",
+    ruleId: "integrations.analytics",
     check: ({ sources }) =>
       sources.some((f) => importsPackage(f.content, "@vercel/analytics") && /<Analytics\b|\binject\s*\(|\btrack\s*\(/.test(f.content))
         ? null
@@ -86,6 +90,7 @@ const RULES: Rule[] = [
   },
   {
     pkg: "@vercel/speed-insights",
+    ruleId: "integrations.analytics",
     check: ({ sources }) =>
       sources.some((f) => importsPackage(f.content, "@vercel/speed-insights") && /<SpeedInsights\b|\binjectSpeedInsights\s*\(/.test(f.content))
         ? null
@@ -98,6 +103,7 @@ const RULES: Rule[] = [
   },
   {
     pkg: "@upstash/ratelimit",
+    ruleId: "integrations.ratelimit-unused",
     check: ({ sources }) =>
       sources.some((f) => importsPackage(f.content, "@upstash/ratelimit") && /\.limit\s*\(/.test(f.content))
         ? null
@@ -110,6 +116,7 @@ const RULES: Rule[] = [
   },
   ...["posthog-js", "posthog-node"].map((pkg): Rule => ({
     pkg,
+    ruleId: "integrations.analytics",
     check: ({ sources }) =>
       sources.some((f) => importsPackage(f.content, pkg) && /posthog\.init\s*\(|new PostHog\s*\(|PostHogProvider/.test(f.content))
         ? null
@@ -156,7 +163,7 @@ export function checkIntegrations(files: RepoFile[]): CheckFinding[] {
       reported.add(rule.pkg);
       const result = rule.check({ files: scoped, sources, dir: project.dir });
       if (!result) continue;
-      out.push({ filePath: project.packageJsonPath, ...result, category: "integrations", confidence: 0.85 });
+      out.push({ ruleId: rule.ruleId, filePath: project.packageJsonPath, ...result, category: "integrations", confidence: 0.85 });
     }
 
     const scripts = Object.values(project.scripts).join(" ");
@@ -169,6 +176,7 @@ export function checkIntegrations(files: RepoFile[]): CheckFinding[] {
     );
     if (unused.length) {
       out.push({
+        ruleId: "integrations.unused-deps",
         severity: "INFO",
         category: "integrations",
         title: `${unused.length} ${unused.length === 1 ? "dependency is" : "dependencies are"} installed but never used`,

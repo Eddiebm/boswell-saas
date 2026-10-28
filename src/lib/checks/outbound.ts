@@ -71,6 +71,7 @@ export function checkOutbound(files: RepoFile[]): CheckFinding[] {
 
       if (readsInput && !guarded && !resolvesToFixedDestination(first, f.content, call.index) && ssrf.length < MAX_LISTED) {
         ssrf.push({
+          ruleId: "security.ssrf",
           severity: "MEDIUM",
           category: "security",
           title: "Possible SSRF: route fetches a URL it didn't choose",
@@ -88,6 +89,7 @@ export function checkOutbound(files: RepoFile[]): CheckFinding[] {
   if (noTimeout.length) {
     const shown = noTimeout.slice(0, MAX_LISTED);
     out.push({
+      ruleId: "reliability.no-timeout",
       severity: "LOW",
       category: "reliability",
       title: `${noTimeout.length} outbound ${noTimeout.length === 1 ? "request has" : "requests have"} no timeout`,

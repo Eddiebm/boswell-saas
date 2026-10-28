@@ -173,6 +173,8 @@ export const auditRuns = pgTable("audit_runs", {
   briefingJson: jsonb("briefing_json"),
   slopJson: jsonb("slop_json"),
   scoresJson: jsonb("scores_json"),
+  /** What Boswell's repo checks could see (coverage + stack facts) — see ChecksSummary. */
+  checksJson: jsonb("checks_json"),
   error: text("error"),
   startedAt: timestamp("started_at", { mode: "date" }),
   finishedAt: timestamp("finished_at", { mode: "date" }),
@@ -202,6 +204,8 @@ export const findings = pgTable("findings", {
   autoFixLevel: autoFixLevelEnum("auto_fix_level").default("red"),
   coaching: jsonb("coaching"),
   confidence: real("confidence").default(0.8),
+  /** Set for findings from Boswell's own repo checks (e.g. `deps.vulnerable`); Ship Ready keys off it. */
+  ruleId: text("rule_id"),
   status: findingStatusEnum("status").default("open").notNull(),
   autoFixable: boolean("auto_fixable").default(false).notNull(),
   firstSeenAt: timestamp("first_seen_at", { mode: "date" }).defaultNow().notNull(),
