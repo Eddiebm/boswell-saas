@@ -22,15 +22,23 @@ revoke them with the provider).
 
 Ship Ready coverage: a connected Supabase project makes "The database
 rejects strangers" a verified check; Supabase/Neon make "Database backups
-are on" verifiable instead of "confirm yourself"; Vercel adds production
-env verification to "Every setting the app needs is documented and set".
+are on" verifiable instead of "confirm yourself"; Vercel makes "Production
+has every setting the code reads" verifiable (without it, that item stays
+"confirm yourself").
+
+Each provider call is an independent check: if one fails (a rejected token
+scope, an unreadable response), the others' results still count, and the
+failed ones are listed in a `provider.unreachable` note and leave their
+coverage unverified. A 200 with a body Boswell can't read never counts as
+a clean result.
 
 ## Static database checks (no connection needed)
 
 For apps whose database is meant to be reached only from the server (Neon,
 plain Postgres, Prisma, Mongo…):
 
-- `db.client-database` — a database driver imported in a client component
+- `db.client-database` — a database driver imported (at runtime — type-only
+  imports are ignored) in a client component
   (the connection string would have to ship to the browser),
 - `db.ssl-disabled` — `sslmode=disable` in a connection string,
 - `db.not-pooled` — Neon's direct endpoint with a TCP driver on serverless

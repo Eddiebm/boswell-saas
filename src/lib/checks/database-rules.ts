@@ -17,7 +17,26 @@ function usesPackage(files: RepoFile[], name: RegExp) {
  * public by design. A table without row level security, or rules left in
  * "test mode", can be read and rewritten by anyone who opens dev tools.
  */
-const DB_DRIVERS = /from\s+["'](?:pg|postgres|@neondatabase\/serverless|drizzle-orm\/(?:neon-http|neon-serverless|node-postgres|postgres-js)|@prisma\/client|mysql2(?:\/promise)?|mongodb|mongoose|@planetscale\/database|@vercel\/postgres)["']/;
+const DB_DRIVER_NAMES = String.raw`pg|postgres|@neondatabase\/serverless|drizzle-orm\/(?:neon-http|neon-serverless|node-postgres|postgres-js)|@prisma\/client|mysql2(?:\/promise)?|mongodb|mongoose|@planetscale\/database|@vercel\/postgres`;
+const DRIVER_IMPORT = new RegExp(String.raw`\bimport\s+([^;"'\x60]*?)\s*from\s+["'](${DB_DRIVER_NAMES})["']|\bimport\s*\(?\s*["'](${DB_DRIVER_NAMES})["']|\brequire\(\s*["'](${DB_DRIVER_NAMES})["']\s*\)`, "g");
+
+/**
+ * The first import of a database driver that survives compilation. Type-only
+ * imports (`import type { User } from "@prisma/client"`, or every specifier
+ * marked `type`) are erased and ship nothing to the browser.
+ */
+function runtimeDriverImport(content: string): { index: number; name: string } | null {
+  for (const m of content.matchAll(DRIVER_IMPORT)) {
+    const clause = m[1];
+    if (clause !== undefined) {
+      if (/^type\s/.test(clause)) continue;
+      const named = /^\{([^}]*)\}$/.exec(clause.trim());
+      if (named && named[1].split(",").map((x) => x.trim()).filter(Boolean).every((x) => /^type\s/.test(x))) continue;
+    }
+    return { index: m.index, name: m[2] ?? m[3] ?? m[4] };
+  }
+  return null;
+}
 
 /**
  * Checks for apps whose database is only meant to be reached from the server
@@ -28,14 +47,14 @@ function serverDatabaseChecks(files: RepoFile[]): CheckFinding[] {
   const out: CheckFinding[] = [];
   for (const f of files) {
     if (!isSourceFile(f) || !/^\s*["']use client["']/m.test(f.content.slice(0, 200))) continue;
-    const m = DB_DRIVERS.exec(f.content);
+    const m = runtimeDriverImport(f.content);
     if (!m) continue;
     out.push({
       ruleId: "db.client-database",
       severity: "CRITICAL",
       category: "database",
       title: "Database driver imported into browser code",
-      description: `\`${f.path}\` is a client component and imports a database driver (\`${m[0].replace(/^from\s+/, "")}\`). For it to connect, the connection string — with the database password — has to be in the JavaScript every visitor downloads.`,
+      description: `\`${f.path}\` is a client component and imports a database driver (\`${m.name}\`). For it to connect, the connection string — with the database password — has to be in the JavaScript every visitor downloads.`,
       filePath: f.path,
       lineStart: lineOf(f.content, m.index),
       recommendation: "Move the query into a server component, route handler or server action, and pass only the results to the client.",

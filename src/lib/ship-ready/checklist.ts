@@ -192,13 +192,32 @@ const ITEMS: ItemDef[] = [
   {
     id: "config",
     area: "Deploy",
-    title: "Every setting the app needs is documented and set",
-    why: "A variable the code reads but production doesn't have is an outage; an undocumented one is an outage waiting for the next deploy or host.",
-    rules: ["deploy.env-undocumented", "deploy.env-missing-prod"],
+    title: "Every setting the app needs is documented",
+    why: "An environment variable the code reads but nobody wrote down is an outage waiting for the next deploy, host or teammate.",
+    rules: ["deploy.env-undocumented"],
     blockAt: "HIGH",
     reviewAt: "MEDIUM",
     coverage: (ctx) => (ctx.summary ? "checked" : "unverifiable"),
     fix: "prompt",
+  },
+  {
+    id: "production-config",
+    area: "Deploy",
+    title: "Production has every setting the code reads",
+    why: "A variable the code reads but production doesn't have is an outage. Only your host knows what's set, so this needs it connected.",
+    rules: ["deploy.env-missing-prod"],
+    blockAt: "HIGH",
+    reviewAt: "MEDIUM",
+    // Passes only on a successful read of the host's production settings.
+    coverage: (ctx) => ctx.summary?.coverage.productionEnv ?? "unverifiable",
+    fix: "prompt",
+    steps: (ctx) =>
+      ctx.facts?.host === "vercel" || ctx.facts?.host === "unknown" || !ctx.facts
+        ? [
+            "Connect Vercel under Connected services on this page — Boswell will compare production's variables with the ones your code reads on every audit.",
+            "Until then: open your host's environment settings and check every variable in .env.example has a Production value.",
+          ]
+        : ["Open your host's environment settings and check every variable in .env.example has a production value."],
   },
   {
     id: "error-monitoring",

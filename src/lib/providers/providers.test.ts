@@ -36,6 +36,33 @@ describe("Supabase connector", () => {
     expect((query?.body as { query: string }).query).toMatch(/relrowsecurity/);
     expect(calls.every((c) => c.method === "GET" || c.url.endsWith("/database/query/read-only"))).toBe(true);
   });
+
+  it("keeps a proven RLS hole when a later call fails", async () => {
+    const { fetcher } = fakeApi({
+      "/database/query/read-only": { json: [{ table_name: "orders", rls_enabled: false }] },
+      "/database/backups": { status: 403, json: { message: "forbidden" } },
+      "/v1/projects/proj_1": { json: { status: "ACTIVE_HEALTHY" } },
+    });
+    const result = await runProviderChecks([conn("supabase")], [], fetcher);
+    expect(result.findings.map((f) => f.ruleId)).toEqual(["db.rls-disabled", "provider.unreachable"]);
+    expect(result.findings[1].description).toContain("Supabase backups returned 403");
+    expect(result.findings[1].description).toContain("token was rejected");
+    expect(result.coverage).toEqual({ databaseRules: "checked" });
+  });
+
+  it("doesn't count an unreadable query response as a clean database", async () => {
+    for (const json of [{ unexpected: true }, [{ tablename: "orders" }], { result: "nope" }]) {
+      const { fetcher } = fakeApi({
+        "/database/query/read-only": { json },
+        "/database/backups": { json: { pitr_enabled: true, backups: [] } },
+        "/v1/projects/proj_1": { json: { status: "ACTIVE_HEALTHY" } },
+      });
+      const result = await runProviderChecks([conn("supabase")], [], fetcher);
+      expect(result.coverage.databaseRules).toBeUndefined();
+      expect(result.findings.map((f) => f.ruleId)).toEqual(["provider.unreachable"]);
+      expect(result.findings[0].description).toContain("couldn't read");
+    }
+  });
 });
 
 describe("Vercel connector", () => {
@@ -54,6 +81,16 @@ describe("Vercel connector", () => {
     expect(result.findings[0].description).not.toContain("DATABASE_URL");
     expect(result.findings[0].description).not.toContain("SEED_ONLY");
     expect(result.coverage).toEqual({ productionEnv: "checked" });
+  });
+
+  it("leaves production settings unverified when the env call fails, but still reports the deploy", async () => {
+    const { fetcher } = fakeApi({
+      "/env": { status: 403, json: { error: { code: "forbidden" } } },
+      "/v7/deployments": { json: { deployments: [{ readyState: "ERROR" }] } },
+    });
+    const result = await runProviderChecks([conn("vercel")], [file("app/page.tsx", "process.env.API_KEY")], fetcher);
+    expect(result.findings.map((f) => f.ruleId)).toEqual(["ops.deploy-failing", "provider.unreachable"]);
+    expect(result.coverage).toEqual({});
   });
 });
 
@@ -92,6 +129,17 @@ describe("server-side database checks (Neon, Postgres, Prisma…)", () => {
     ]);
     expect(result.findings.map((f) => f.ruleId)).toEqual(["db.client-database", "db.ssl-disabled"]);
     expect(result.coverage).toBe("not-applicable"); // no browser-facing database API to protect with RLS
+  });
+
+  it("ignores type-only imports in client components — they're erased at build time", () => {
+    const typeOnly = [
+      '"use client";\nimport type { User } from "@prisma/client";',
+      '"use client";\nimport { type User, type Post } from "@prisma/client";',
+      '"use client"\nimport React from "react"\nimport type { Pool } from "pg"\n',
+    ];
+    for (const content of typeOnly) expect(checkDatabaseRules([file("components/user.tsx", content)]).findings).toEqual([]);
+    const runtime = ['"use client";\nimport { PrismaClient, type User } from "@prisma/client";', '"use client";\nconst { Pool } = require("pg");', '"use client";\nimport "pg";'];
+    for (const content of runtime) expect(checkDatabaseRules([file("components/user.tsx", content)]).findings.map((f) => f.ruleId)).toEqual(["db.client-database"]);
   });
 
   it("suggests Neon's pooled endpoint for a TCP driver on serverless, but not when pooling is used", () => {
