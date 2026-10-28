@@ -19,7 +19,8 @@ function usesPackage(files: RepoFile[], name: RegExp) {
  */
 export function checkDatabaseRules(files: RepoFile[]): DatabaseRulesResult {
   const findings: CheckFinding[] = [];
-  const usesSupabase = usesPackage(files, /"@supabase\/(?:supabase-js|ssr|auth-helpers-[\w-]+)"/) || files.some((f) => f.path.startsWith("supabase/"));
+  // The client package, not a supabase/ folder: apps that moved to Neon or plain Postgres often keep the old migrations around.
+  const usesSupabase = usesPackage(files, /"@supabase\/(?:supabase-js|ssr|auth-helpers-[\w-]+)"/);
   const usesFirebase = usesPackage(files, /"firebase"\s*:/);
   if (!usesSupabase && !usesFirebase) return { findings, coverage: "not-applicable" };
 

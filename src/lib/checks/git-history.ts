@@ -3,6 +3,8 @@ import { isEnvExample, isTestFile } from "@/lib/checks/collect-files";
 import { findSecrets, maskSecret } from "@/lib/checks/hardcoded-secrets";
 import type { CheckFinding, RepoFile } from "@/lib/checks/types";
 
+const VENDORED = /(^|\/)(?:node_modules|vendor|bower_components|\.yarn|dist|build|\.next|out|coverage)\/|\.min\.js$/;
+
 const MAX_COMMITS = 50;
 const MAX_OUTPUT = 32 * 1024 * 1024;
 const TIMEOUT_MS = 60_000;
@@ -78,7 +80,8 @@ export async function checkGitHistorySecrets(repoDir: string, files: RepoFile[],
 
   for (const add of parseAddedLines(log)) {
     const pseudo = { path: add.file, content: add.text };
-    if (isTestFile(pseudo) || isEnvExample(pseudo)) continue;
+    // Committed dependencies and build output hold other people's code (key-parsing libraries, test vectors).
+    if (isTestFile(pseudo) || isEnvExample(pseudo) || VENDORED.test(add.file)) continue;
     for (const hit of findSecrets(add.text)) {
       if (current.has(hit.value) || seen.has(hit.value)) continue;
       seen.add(hit.value);
