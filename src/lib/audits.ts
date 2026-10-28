@@ -29,6 +29,7 @@ import type { AuditMode } from "@/lib/audit-modes";
 import { normalizeAuditMode } from "@/lib/audit-modes";
 import { generateAuditReport, reportToMarkdown } from "@/lib/reports/generate-report";
 import { processAuditJob } from "@/lib/worker/process-audit";
+import { runGuardAudit } from "@/lib/guard/run";
 import { sendAuditAlert } from "@/lib/alerts/audit-alerts";
 import { triggerAuditWorkerDispatch } from "@/lib/worker/trigger-worker";
 
@@ -52,7 +53,7 @@ export async function listAuditsForUser(userId: string) {
     })
     .from(auditRuns)
     .innerJoin(repositories, eq(auditRuns.repositoryId, repositories.id))
-    .where(eq(auditRuns.userId, userId))
+    .where(and(eq(auditRuns.userId, userId), eq(auditRuns.trigger, "manual")))
     .orderBy(desc(auditRuns.createdAt));
 }
 
@@ -284,6 +285,9 @@ export async function runQueuedAudit(auditId: string) {
 
   const token = await getGithubToken(run.userId);
   if (!token) throw new Error("Missing GitHub token");
+
+  // Push-guard runs are checks-only and report to GitHub; they never touch scores, reports or the fix queue.
+  if (run.trigger === "guard") return runGuardAudit(run, repo, token);
 
   try {
     const result = await processAuditJob({

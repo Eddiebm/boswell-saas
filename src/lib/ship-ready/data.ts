@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { getAuditForUser } from "@/lib/audits";
 import type { ChecksSummary } from "@/lib/checks";
 import { requireDb } from "@/lib/db";
@@ -17,6 +17,8 @@ export type ShipReadyView = {
   dependencyFixId: string | null;
   /** True when the audit predates Ship Ready's checks, so most items can't be judged. */
   needsReaudit: boolean;
+  /** Push guard state for the repository; null in demo mode. */
+  guard: { repositoryId: string; enabled: boolean; lastRun: { at: string | null; description: string | null; commitSha: string | null } | null } | null;
 };
 
 function liveState(result: string | null | undefined): LiveVerifyState {
@@ -33,7 +35,7 @@ async function latestAuditId(userId: string): Promise<string | null> {
     const [row] = await db
       .select({ id: auditRuns.id })
       .from(auditRuns)
-      .where(and(eq(auditRuns.userId, userId), eq(auditRuns.repositoryId, primary), eq(auditRuns.status, "completed")))
+      .where(and(eq(auditRuns.userId, userId), eq(auditRuns.repositoryId, primary), eq(auditRuns.status, "completed"), eq(auditRuns.trigger, "manual")))
       .orderBy(desc(auditRuns.finishedAt))
       .limit(1);
     if (row) return row.id;
@@ -69,6 +71,7 @@ export async function getShipReady(userId: string, auditId?: string): Promise<Sh
       }),
       dependencyFixId: "demo-dependency-fix-1",
       needsReaudit: false,
+      guard: { repositoryId: "demo-repo-audiolens", enabled: false, lastRun: null },
     };
   }
 
@@ -89,10 +92,23 @@ export async function getShipReady(userId: string, auditId?: string): Promise<Sh
     .from(dependencyFixes)
     .where(and(eq(dependencyFixes.auditRunId, id), eq(dependencyFixes.status, "ready")))
     .limit(1);
-  const [repo] = await db.select({ fullName: repositories.fullName }).from(repositories).where(eq(repositories.id, audit.repo.id)).limit(1);
+  const [repo] = await db
+    .select({ fullName: repositories.fullName, guardWebhookId: repositories.guardWebhookId })
+    .from(repositories)
+    .where(eq(repositories.id, audit.repo.id))
+    .limit(1);
 
-  const summary = (audit.run.checksJson as ChecksSummary | null) ?? null;
-  const findings: ShipFinding[] = audit.findings
+  // A push to the default branch checked by the guard after this audit is the newer truth for the repo checks.
+  const [guardRun] = await db
+    .select()
+    .from(auditRuns)
+    .where(and(eq(auditRuns.repositoryId, audit.repo.id), eq(auditRuns.trigger, "guard"), isNull(auditRuns.prNumber), eq(auditRuns.status, "completed")))
+    .orderBy(desc(auditRuns.finishedAt))
+    .limit(1);
+  const useGuard = !auditId && guardRun?.finishedAt && audit.run.finishedAt && guardRun.finishedAt > audit.run.finishedAt;
+
+  const summary = ((useGuard ? guardRun.checksJson : audit.run.checksJson) as ChecksSummary | null) ?? null;
+  const engineAndChecks: ShipFinding[] = audit.findings
     .filter((f) => f.status !== "fixed" && f.status !== "ignored" && !f.resolved)
     .map((f) => ({
       id: f.id,
@@ -106,11 +122,14 @@ export async function getShipReady(userId: string, auditId?: string): Promise<Sh
       recommendation: f.recommendation,
       confidence: f.confidence ?? 0.8,
     }));
+  const findings = useGuard
+    ? [...engineAndChecks.filter((f) => !f.ruleId), ...(((guardRun.guardJson as { findings?: ShipFinding[] } | null)?.findings ?? []) as ShipFinding[])]
+    : engineAndChecks;
 
   return {
     auditId: id,
     repoFullName: repo?.fullName ?? audit.repo.fullName,
-    checkedAt: audit.run.finishedAt?.toISOString() ?? null,
+    checkedAt: ((useGuard ? guardRun.finishedAt : audit.run.finishedAt) ?? null)?.toISOString() ?? null,
     verdict: evaluateShipReady({
       repo: repo?.fullName ?? audit.repo.fullName,
       findings,
@@ -121,5 +140,12 @@ export async function getShipReady(userId: string, auditId?: string): Promise<Sh
     }),
     dependencyFixId: fix?.id ?? null,
     needsReaudit: summary === null,
+    guard: {
+      repositoryId: audit.repo.id,
+      enabled: Boolean(repo?.guardWebhookId),
+      lastRun: guardRun
+        ? { at: guardRun.finishedAt?.toISOString() ?? null, description: guardRun.summary, commitSha: guardRun.commitSha }
+        : null,
+    },
   };
 }

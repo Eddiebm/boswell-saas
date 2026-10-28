@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   integer,
   jsonb,
@@ -150,6 +151,10 @@ export const repositories = pgTable("repositories", {
   healthScore: integer("health_score"),
   slopPercent: real("slop_percent"),
   discoveryJson: jsonb("discovery_json").$type<DiscoveryResult>(),
+  /** Push guard: the GitHub webhook Boswell created, and its signing secret (encrypted). */
+  guardWebhookId: bigint("guard_webhook_id", { mode: "number" }),
+  guardSecret: text("guard_secret"),
+  guardEnabledAt: timestamp("guard_enabled_at", { mode: "date" }),
   lastAuditAt: timestamp("last_audit_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });
@@ -164,6 +169,13 @@ export const auditRuns = pgTable("audit_runs", {
     .references(() => repositories.id, { onDelete: "cascade" }),
   status: auditStatusEnum("status").default("queued").notNull(),
   auditMode: text("audit_mode").default("standard").notNull(),
+  /** "manual" for full audits; "guard" for the checks-only runs the push guard queues on each push or PR. */
+  trigger: text("trigger").default("manual").notNull(),
+  /** Guard runs: the commit checked and, for pull requests, the PR number. */
+  targetSha: text("target_sha"),
+  prNumber: integer("pr_number"),
+  /** Guard runs keep their findings here rather than in `findings`, so PR branches never mix into the repo's findings. */
+  guardJson: jsonb("guard_json"),
   commitSha: text("commit_sha"),
   stack: jsonb("stack").$type<string[]>().default([]),
   costUsd: numeric("cost_usd", { precision: 10, scale: 4 }),
