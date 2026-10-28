@@ -63,6 +63,9 @@ describe("live check invariants", () => {
     const smoke = read("src/lib/live/smoke.ts");
     expect(smoke).toMatch(/env:\s*\{\s*HOME:[^}]*PATH:[^}]*\}/);
     expect(smoke).not.toMatch(/\.\.\.process\.env/);
-    expect(smoke).toContain("route.abort()");
+    // Behaviour is covered against a real browser in src/lib/live/live-boundary.test.ts.
+    expect(smoke).toContain('route.abort("blockedbyclient")');
+    expect(smoke).toContain("maxRedirects: 0");
+    expect(smoke).toContain('serviceWorkers: "block"');
   });
 });

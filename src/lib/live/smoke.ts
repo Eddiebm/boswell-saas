@@ -1,3 +1,4 @@
+import dns from "node:dns/promises";
 import net from "node:net";
 import os from "node:os";
 import type { CheckFinding } from "@/lib/checks/types";
@@ -25,10 +26,40 @@ type PageResult = {
 
 export type SmokeResult = { findings: CheckFinding[]; ran: boolean; pages: PageResult[] };
 
-function blockedHost(hostname: string, allowPrivate: boolean) {
-  if (allowPrivate) return false;
-  if (hostname === "localhost" || hostname.endsWith(".localhost")) return true;
-  return net.isIP(hostname) ? isBlockedAddress(hostname) : false;
+/** Browser requests that can't change data. Anything else a page sends on load is aborted. */
+const READ_ONLY_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+export type Lookup = (hostname: string) => Promise<Array<{ address: string }>>;
+const systemLookup: Lookup = (hostname) => dns.lookup(hostname, { all: true });
+
+/**
+ * Whether the browser may contact this URL: http(s) only, and the host — a
+ * literal IP (`[::1]` included) or every address its name resolves to — must
+ * be public. `allowHost` lets tests reach their local server and nothing else.
+ */
+export async function browserDestinationAllowed(rawUrl: string, options: { allowHost?: string; lookup?: Lookup; cache?: Map<string, Promise<boolean>> } = {}): Promise<boolean> {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (options.allowHost && host === options.allowHost) return true;
+  if (host === "localhost" || host.endsWith(".localhost")) return false;
+  if (net.isIP(host)) return !isBlockedAddress(host);
+  const cache = options.cache ?? new Map<string, Promise<boolean>>();
+  if (!cache.has(host)) {
+    cache.set(
+      host,
+      (options.lookup ?? systemLookup)(host).then(
+        (records) => records.length > 0 && records.every((r) => !isBlockedAddress(r.address)),
+        () => false,
+      ),
+    );
+  }
+  return cache.get(host)!;
 }
 
 /**
@@ -36,10 +67,15 @@ function blockedHost(hostname: string, allowPrivate: boolean) {
  * and records what a visitor would hit: error pages, crashes in the page's
  * JavaScript, layouts wider than the phone screen, and very slow loads.
  *
- * The browser runs the site's own JavaScript, so it gets an empty
- * environment (none of the worker's secrets), private and metadata
- * addresses are blocked, and a test-account session cookie is scoped to
- * the site's own domain so third-party scripts never receive it.
+ * The browser runs the site's own JavaScript, so:
+ * - it gets an empty environment (none of the worker's secrets),
+ * - every request is checked before it leaves: only GET/HEAD/OPTIONS (a page
+ *   that POSTs on load can't change production data) and only to public
+ *   addresses. Requests are made one hop at a time (redirects come back to
+ *   this check), service workers are off and WebSockets are refused, so
+ *   nothing reaches the network unchecked,
+ * - a test-account session cookie is scoped to the site's own domain so
+ *   third-party scripts never receive it.
  */
 export async function runSmoke(input: { baseUrl: string; pages: string[]; session?: Session | null; allowPrivate?: boolean }): Promise<SmokeResult> {
   let chromium: typeof import("playwright-core").chromium;
@@ -61,15 +97,28 @@ export async function runSmoke(input: { baseUrl: string; pages: string[]; sessio
   }
 
   const base = new URL(input.baseUrl);
+  const allowHost = input.allowPrivate ? base.hostname.replace(/^\[|\]$/g, "").toLowerCase() : undefined;
+  const dnsCache = new Map<string, Promise<boolean>>();
   const paths = ["/", ...input.pages.filter((p) => p !== "/")].slice(0, MAX_PAGES);
   const results: PageResult[] = [];
   try {
     for (const vp of VIEWPORTS) {
-      const context = await browser.newContext({ viewport: vp.viewport, isMobile: vp.isMobile, hasTouch: vp.isMobile });
-      await context.route("**/*", (route) => {
-        const host = new URL(route.request().url()).hostname;
-        return blockedHost(host, Boolean(input.allowPrivate)) ? route.abort() : route.continue();
+      const context = await browser.newContext({ viewport: vp.viewport, isMobile: vp.isMobile, hasTouch: vp.isMobile, serviceWorkers: "block" });
+      await context.route("**/*", async (route) => {
+        const request = route.request();
+        if (!READ_ONLY_METHODS.has(request.method()) || !(await browserDestinationAllowed(request.url(), { allowHost, cache: dnsCache }))) {
+          return route.abort("blockedbyclient");
+        }
+        // Fetched here one hop at a time: Chromium follows a continued request's
+        // redirects without asking the route again, so a public page could
+        // otherwise bounce the browser to 169.254.169.254.
+        try {
+          return await route.fulfill({ response: await route.fetch({ maxRedirects: 0, timeout: NAV_TIMEOUT_MS }) });
+        } catch {
+          return route.abort("failed").catch(() => {});
+        }
       });
+      await context.routeWebSocket(/.*/, (ws) => ws.close());
       const cookie = input.session?.cookie;
       if (cookie && cookie.includes("=")) {
         const [name, ...rest] = cookie.split("=");
