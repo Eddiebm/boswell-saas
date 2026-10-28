@@ -98,7 +98,7 @@ describe("monitoring wiring", () => {
   });
 
   it("reports caught failures in every worker job", () => {
-    expect(read("src/lib/audits.ts")).toContain('reportError(error, { component: "audit"');
+    expect(read("src/lib/audit-runner.ts")).toContain('reportError(error, { component: "audit"');
     expect(read("src/lib/guard/run.ts")).toContain('reportError(error, { component: "guard"');
     expect(read("src/lib/dynamic-verify/run.ts")).toContain('reportError(error, { component: "verify"');
     expect(read("src/lib/worker/process-audit.ts")).toContain('reportError(error, { component: "repo-checks" })');
@@ -113,7 +113,7 @@ describe("monitoring wiring", () => {
   });
 
   it("redacts failure messages before they're stored, emailed or shown", () => {
-    expect(read("src/lib/audits.ts")).toContain('const message = redactSecrets(error instanceof Error ? error.message : "Audit failed");');
+    expect(read("src/lib/audit-runner.ts")).toContain('const message = redactSecrets(error instanceof Error ? error.message : "Audit failed");');
     expect(read("src/lib/guard/run.ts")).toContain("const message = redactSecrets(");
     expect(read("src/lib/dynamic-verify/run.ts")).toContain("const message = redactSecrets(");
   });
