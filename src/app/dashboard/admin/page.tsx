@@ -1,11 +1,24 @@
 export const dynamic = "force-dynamic";
 
+import { redirect } from "next/navigation";
 import { Card } from "@/components/ui";
+import { auth } from "@/lib/auth";
+import { isAdminEmail } from "@/lib/admin";
 import { getEnvChecks } from "@/lib/env";
 import { getWorkerHealth } from "@/lib/data";
 import { isDemoMode } from "@/lib/demo/mode";
 
 export default async function AdminPage() {
+  // Defense in depth: middleware already gates /dashboard/admin, but Server
+  // Functions should verify authorization themselves too (a matcher change
+  // or refactor could otherwise silently drop coverage).
+  if (!isDemoMode()) {
+    const session = await auth();
+    if (!isAdminEmail(session?.user?.email)) {
+      redirect("/dashboard");
+    }
+  }
+
   const checks = getEnvChecks();
   const worker = isDemoMode() ? null : await getWorkerHealth();
 
