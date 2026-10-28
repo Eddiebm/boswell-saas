@@ -34,6 +34,30 @@ describe("outbound calls have timeouts and fail softly", () => {
     expect(calls[0].signal).toBeInstanceOf(AbortSignal);
   });
 
+  /** Headers arrive in time, then the body read is aborted by the same timeout. */
+  function bodyTimingOutFetch(status: number) {
+    vi.stubGlobal("fetch", async () => {
+      const body = new ReadableStream({
+        start(controller) {
+          controller.error(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
+        },
+      });
+      return new Response(body, { status, headers: { "content-type": "application/json" } });
+    });
+  }
+
+  it("a model that times out while sending its answer also falls back", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    bodyTimingOutFetch(200);
+    await expect(askOpenRouter("why?", "context")).resolves.toBeNull();
+  });
+
+  it("an email error response that times out mid-body doesn't throw either", async () => {
+    Object.assign(process.env, { ADMIN_ALERT_EMAIL: "owner@example.com", RESEND_API_KEY: "re_test" });
+    bodyTimingOutFetch(500);
+    await expect(sendAuditAlert({ auditId: "a1", reason: "boom", status: "failed" })).resolves.toEqual({ sent: false, reason: "resend_unreachable" });
+  });
+
   it("the worker dispatch is bounded too", async () => {
     process.env.GITHUB_WORKFLOW_TOKEN = "ghp_test";
     const calls = timingOutFetch();

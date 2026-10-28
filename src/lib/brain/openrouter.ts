@@ -12,9 +12,9 @@ export async function askOpenRouter(
 
   const model = process.env.OPENROUTER_MODEL ?? "openrouter/auto";
 
-  let response: Response;
+  let json: { choices?: Array<{ message?: { content?: string } }>; model?: string };
   try {
-    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -46,18 +46,12 @@ export async function askOpenRouter(
       // A slow model falls back to the template answer instead of hanging the request.
       signal: AbortSignal.timeout(45_000),
     });
+    if (!response.ok) return null;
+    // Inside the try: the timeout also covers reading the body.
+    json = (await response.json()) as typeof json;
   } catch {
     return null;
   }
-
-  if (!response.ok) {
-    return null;
-  }
-
-  const json = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-    model?: string;
-  };
 
   const answer = json.choices?.[0]?.message?.content?.trim();
   if (!answer) return null;

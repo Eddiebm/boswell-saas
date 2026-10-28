@@ -28,9 +28,8 @@ export async function sendAuditAlert(input: AuditAlertInput) {
     .filter(Boolean)
     .join("\n");
 
-  let response: Response;
   try {
-    response = await fetch("https://api.resend.com/emails", {
+    const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -40,14 +39,13 @@ export async function sendAuditAlert(input: AuditAlertInput) {
       // An alert must never hold up the audit that triggered it.
       signal: AbortSignal.timeout(10_000),
     });
+    if (!response.ok) {
+      // Reading the error body is covered by the same timeout.
+      const body = await response.text();
+      return { sent: false, reason: `resend_error:${response.status}:${body}` };
+    }
+    return { sent: true as const };
   } catch {
     return { sent: false, reason: "resend_unreachable" };
   }
-
-  if (!response.ok) {
-    const body = await response.text();
-    return { sent: false, reason: `resend_error:${response.status}:${body}` };
-  }
-
-  return { sent: true as const };
 }
