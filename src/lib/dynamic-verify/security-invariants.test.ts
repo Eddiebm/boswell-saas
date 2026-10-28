@@ -74,7 +74,7 @@ describe("dynamic-verify safety invariants", () => {
   });
 
   it("scopes fix-queue deletion on audit refresh to audit-derived items only", () => {
-    const audits = read("src/lib/audits.ts");
+    const audits = read("src/lib/audit-runner.ts");
     expect(audits).toMatch(/delete\(fixQueueItems\)[\s\S]{0,200}fixQueueItems\.source/);
   });
 });
