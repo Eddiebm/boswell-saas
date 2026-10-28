@@ -161,6 +161,18 @@ describe("runLiveChecks against a running site", () => {
 });
 
 describe("admin guard recognition", () => {
+  it("accepts the app's own admin, role and operator helpers", () => {
+    const guarded = [
+      'import { isAdminUser } from "@/lib/admin-auth";\nexport async function POST() { if (!(await isAdminUser())) return deny(); }',
+      "export async function POST() { const jar = await cookies(); if (!isAdminSession(jar)) return deny(); }",
+      "export async function GET(request) { const auth = await requirePlatformRoleOrResponse(request, REVIEWERS); if (auth instanceof Response) return auth; }",
+      "export async function POST() { const op = await requireOperator(); if ('error' in op) return deny(); }",
+    ];
+    for (const content of guarded) expect(checkAuthorization([file("app/api/admin/x/route.ts", content)])).toEqual([]);
+    const signedInOnly = "export async function POST() { const user = await getCurrentUser(); if (!user) return deny(); await wipe(); }";
+    expect(checkAuthorization([file("app/api/admin/x/route.ts", signedInOnly)]).map((f) => f.ruleId)).toEqual(["authz.admin-unguarded"]);
+  });
+
   it("accepts a shared-secret header check as an admin guard", () => {
     const route = file(
       "app/api/admin/stats/route.ts",

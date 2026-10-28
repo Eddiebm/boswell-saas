@@ -4,6 +4,12 @@ import { lineOf, type CheckFinding, type RepoFile } from "@/lib/checks/types";
 
 const ROLE_CHECK =
   /\b(?:role|roles|isAdmin|is_admin|isSuperuser|admin)\b\s*(?:===|!==|==|!=|\.includes\()|\b(?:requireAdmin|assertAdmin|isAdmin|hasRole|checkRole|requireRole|ensureAdmin|adminOnly|withAdmin)\s*\(|ADMIN_EMAILS?\b|ADMIN_USER_IDS?\b|\bpermissions?\b/i;
+/**
+ * The app's own guard helpers: `isAdminUser()`, `isAdminSession(jar)`,
+ * `requirePlatformRoleOrResponse(req, roles)`, `requireOperator()`,
+ * `assertStaff(user)`… — a verb that checks, then admin/role/operator/staff.
+ */
+const ROLE_HELPER = /\b(?:is|require|assert|ensure|check|has|can|verify|with|get)\w*(?:Admin|Role|Operator|Staff|Superuser|Moderator|Permission)\w*\s*\(/;
 
 /** Machine-only admin routes guarded by a shared secret in a request header (`x-admin-secret` vs ADMIN_SECRET). */
 function headerSecretGuard(content: string) {
@@ -59,7 +65,7 @@ export function checkAuthorization(files: RepoFile[]): CheckFinding[] {
       });
     }
 
-    if (/(^|\/)admin(\/|\b)/.test(f.path) && !middlewareGuardsAdmin && !ROLE_CHECK.test(f.content) && !headerSecretGuard(f.content)) {
+    if (/(^|\/)admin(\/|\b)/.test(f.path) && !middlewareGuardsAdmin && !ROLE_CHECK.test(f.content) && !ROLE_HELPER.test(f.content) && !headerSecretGuard(f.content)) {
       unguardedAdmin.push({ file: f });
     }
   }
