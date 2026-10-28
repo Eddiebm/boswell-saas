@@ -3,6 +3,7 @@ import { requireDb } from "@/lib/db";
 import {
   auditDocuments,
   auditRuns,
+  dependencyFixes,
   findings,
   fixQueueItems,
   memoryEvents,
@@ -333,10 +334,34 @@ export async function runQueuedAudit(auditId: string) {
               filePath: f.filePath,
               recommendation: f.recommendation,
             }),
-            confidence: 0.85,
+            confidence: f.confidence ?? 0.85,
             autoFixable: enriched.canOpenPr,
           };
         }),
+      );
+    }
+
+    if (result.dependencyFixes.length) {
+      // Only the newest patch is worth opening a PR from; older ones were computed against older lockfiles.
+      await db
+        .update(dependencyFixes)
+        .set({ status: "stale", patchedLockfile: "", patchedPackageJson: null })
+        .where(and(eq(dependencyFixes.repositoryId, repo.id), eq(dependencyFixes.status, "ready")));
+      await db.insert(dependencyFixes).values(
+        result.dependencyFixes.map((fix) => ({
+          repositoryId: repo.id,
+          auditRunId: run.id,
+          lockfilePath: fix.lockfilePath,
+          baseLockfileBlobSha: fix.baseLockfileBlobSha,
+          patchedLockfile: fix.patchedLockfile,
+          packageJsonPath: fix.packageJsonPath,
+          basePackageJsonBlobSha: fix.basePackageJsonBlobSha,
+          patchedPackageJson: fix.patchedPackageJson,
+          pinBumps: fix.pinBumps,
+          changes: fix.changes,
+          beforeCounts: fix.beforeCounts,
+          afterCounts: fix.afterCounts,
+        })),
       );
     }
 
@@ -528,6 +553,7 @@ export async function runQueuedAudit(auditId: string) {
       .set({
         status: "completed",
         finishedAt: new Date(),
+        commitSha: result.commitSha,
         stack: result.stack,
         costUsd: result.costUsd?.toString(),
         summary: result.summary,

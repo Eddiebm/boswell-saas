@@ -2,6 +2,7 @@ import { isDemoMode } from "@/lib/demo/mode";
 import {
   demoAuditMarkdown,
   demoBriefing,
+  demoDependencyFixes,
   demoFindings,
   demoFixQueue,
   demoMemory,
@@ -19,6 +20,7 @@ import { requireDb } from "@/lib/db";
 import { eq, desc, and } from "drizzle-orm";
 import {
   auditRuns,
+  dependencyFixes,
   findings,
   fixQueueItems,
   memoryEvents,
@@ -42,6 +44,7 @@ import type { RepoScoreResult } from "@/lib/scoring/types";
 import { emptySlopResult, type SlopResult } from "@/lib/slop/engine";
 import type { AutoFixLevel } from "@/lib/automation/safe-fix-policy";
 import type { FindingClassification } from "@/lib/classification/classify";
+import type { DependencyFixView } from "@/components/dependency-fix-card";
 import { canUseExecutiveDashboard, canUseLlmBrain, type PlanId } from "@/lib/plans";
 
 export async function getPrimaryRepoId(userId: string): Promise<string | null> {
@@ -510,6 +513,27 @@ export async function getAuditReport(userId: string, auditId: string): Promise<A
     slop,
     repoId: repo.id,
   };
+}
+
+export async function getDependencyFixesForAudit(userId: string, auditId: string): Promise<DependencyFixView[]> {
+  if (isDemoMode()) return demoDependencyFixes;
+  const audit = await getAuditForUser(userId, auditId);
+  if (!audit) return [];
+  const db = requireDb();
+  const rows = await db
+    .select({
+      id: dependencyFixes.id,
+      lockfilePath: dependencyFixes.lockfilePath,
+      status: dependencyFixes.status,
+      prUrl: dependencyFixes.prUrl,
+      changes: dependencyFixes.changes,
+      pinBumps: dependencyFixes.pinBumps,
+      beforeCounts: dependencyFixes.beforeCounts,
+      afterCounts: dependencyFixes.afterCounts,
+    })
+    .from(dependencyFixes)
+    .where(eq(dependencyFixes.auditRunId, auditId));
+  return rows.map(({ changes, ...row }) => ({ ...row, changeCount: changes.length }));
 }
 
 export async function askBrain(userId: string, question: string, repoId?: string) {

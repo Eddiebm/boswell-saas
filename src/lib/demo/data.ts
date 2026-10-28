@@ -129,6 +129,32 @@ const rawFindings = [
     confidence: 0.82,
     autoFixable: true,
   },
+  {
+    id: "f6",
+    repositoryId: DEMO_REPO_ID,
+    auditRunId: DEMO_AUDIT_ID,
+    title: "Vulnerable dependency: next@15.5.2",
+    description: "4 published advisories for `next@15.5.2` (npm rates it critical). You depend on it directly. Exposure: installed in production.",
+    severity: "CRITICAL" as const,
+    category: "dependencies",
+    filePath: "package-lock.json",
+    status: "open" as const,
+    confidence: 0.95,
+    autoFixable: false,
+  },
+  {
+    id: "f7",
+    repositoryId: DEMO_REPO_ID,
+    auditRunId: DEMO_AUDIT_ID,
+    title: "Sentry is installed but not connected",
+    description: "`sentry.server.config.ts` exists, but there's no `instrumentation.ts` that loads it — server-side errors are not reported.",
+    severity: "MEDIUM" as const,
+    category: "integrations",
+    filePath: "package.json",
+    status: "open" as const,
+    confidence: 0.85,
+    autoFixable: false,
+  },
 ];
 
 export const demoFindings = rawFindings.map((f) => {
@@ -344,3 +370,16 @@ export const demoVerifyRuns = [
 
 export { answerBrainQuestion } from "@/lib/brain/answer";
 export type { CoachingSections };
+
+export const demoDependencyFixes = [
+  {
+    id: "demo-dependency-fix-1",
+    lockfilePath: "package-lock.json",
+    status: "ready",
+    prUrl: null,
+    changeCount: 38,
+    pinBumps: [{ name: "next", from: "15.5.2", to: "15.5.9" }],
+    beforeCounts: { info: 0, low: 2, moderate: 3, high: 4, critical: 1, total: 10 },
+    afterCounts: { info: 0, low: 1, moderate: 1, high: 0, critical: 0, total: 2 },
+  },
+];

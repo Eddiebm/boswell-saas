@@ -16,6 +16,8 @@ Boswell watches your repositories, understands what changed, remembers engineeri
 | Engineering Memory | **DB-backed** (after audit) |
 | Engineering Brain Q&A | **Templates on Free, LLM on Pro** |
 | Safe-fix PR creation | **Live on Pro** (GitHub branch PR) |
+| Repo health checks (lockfile drift, vulnerable deps, unconnected integrations, env vars, SSRF/timeouts, secret exposure, data-wiping refreshes, copied bugs) | **Live** — see [docs/repo-checks.md](docs/repo-checks.md) |
+| Dependency fix PR (non-breaking `npm audit fix`, lockfile only) | **Live on Pro** |
 | GitHub OAuth + audits | **Live** (requires env) |
 | Live access-control verification | **Beta** (Pro, staging targets only) |
 | Stripe billing | **Free + Pro** (requires env) |
@@ -60,7 +62,7 @@ Sign in with GitHub OAuth → Sync repos → Run audit. **Production audits run 
 npm test
 ```
 
-Covers: scoring, audit parser, fix-queue, AI slop, classification, safe-fix policy, report generation, memory queries.
+Covers: scoring, audit parser, fix-queue, AI slop, classification, safe-fix policy, report generation, memory queries, repo health checks, the dependency fix PR flow, and the worker's no-code-execution invariants.
 
 ## Documentation
 
@@ -98,3 +100,5 @@ See `docs/` for architecture, deployment, scoring methodology, and safety policy
 - Engineering Brain uses grounded templates in demo; production LLM Q&A needs `OPENROUTER_API_KEY` wiring.
 - Safe-fix PR creation is simulated in demo; live PRs need GitHub token + implementation in `/api/pr/create`.
 - Vercel cannot run long Python audits — use Render worker (`render.yaml`).
+- Checks 6–8 in [docs/repo-checks.md](docs/repo-checks.md) are pattern matches, not data-flow analysis; they're labelled "needs review" and don't affect the score.
+- Dependency auditing covers npm (`package-lock.json`) only; yarn/pnpm/bun projects get the other checks.

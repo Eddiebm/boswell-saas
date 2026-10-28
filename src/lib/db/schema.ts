@@ -501,3 +501,33 @@ export const safeFixPolicies = pgTable("safe_fix_policies", {
   description: text("description").notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });
+
+/**
+ * A lockfile (and, for pinned direct dependencies, package.json) that the
+ * worker patched in an isolated `npm audit fix --package-lock-only` run.
+ * The blob shas pin the exact files the patch was computed from, so a PR is
+ * never opened against a lockfile that has changed since the audit.
+ */
+export const dependencyFixes = pgTable("dependency_fixes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  repositoryId: uuid("repository_id")
+    .notNull()
+    .references(() => repositories.id, { onDelete: "cascade" }),
+  auditRunId: uuid("audit_run_id")
+    .notNull()
+    .references(() => auditRuns.id, { onDelete: "cascade" }),
+  lockfilePath: text("lockfile_path").notNull(),
+  baseLockfileBlobSha: text("base_lockfile_blob_sha").notNull(),
+  patchedLockfile: text("patched_lockfile").notNull(),
+  packageJsonPath: text("package_json_path").notNull(),
+  basePackageJsonBlobSha: text("base_package_json_blob_sha").notNull(),
+  patchedPackageJson: text("patched_package_json"),
+  pinBumps: jsonb("pin_bumps").$type<Array<{ name: string; field: string; from: string; to: string }>>().default([]).notNull(),
+  changes: jsonb("changes").$type<Array<{ name: string; from: string | null; to: string | null }>>().default([]).notNull(),
+  beforeCounts: jsonb("before_counts").$type<Record<string, number> | null>(),
+  afterCounts: jsonb("after_counts").$type<Record<string, number> | null>(),
+  /** ready | pr_opened | stale */
+  status: text("status").default("ready").notNull(),
+  prUrl: text("pr_url"),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
