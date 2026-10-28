@@ -1,3 +1,4 @@
+import semver from "semver";
 import type { CheckFinding } from "@/lib/checks/types";
 
 type PackageJson = Record<string, unknown> & {
@@ -26,6 +27,18 @@ export type DriftInput = {
 
 function at(dir: string, file: string) {
   return dir ? `${dir}/${file}` : file;
+}
+
+/**
+ * Whether npm would accept the locked version for this spec. Only plain
+ * semver ranges can be judged; tags, git URLs, aliases and local paths are
+ * given the benefit of the doubt.
+ */
+function satisfiesSpec(version: string | undefined, spec: string): boolean {
+  if (!version) return false;
+  const range = semver.validRange(spec, { loose: true });
+  if (range === null) return true;
+  return semver.satisfies(version, range, { includePrerelease: true, loose: true });
 }
 
 /**
@@ -79,7 +92,10 @@ export function checkLockfileDrift(input: DriftInput): CheckFinding[] {
     ];
   }
 
+  // Blocking: what npm ci itself rejects (a declared dependency with no locked version that satisfies it).
+  // Stale: the lockfile's record of package.json is out of date, but every install still resolves correctly.
   const problems: string[] = [];
+  const stale: string[] = [];
   const root = lock.packages?.[""] as (Record<string, Record<string, string> | undefined>) | undefined;
 
   if (root) {
@@ -89,12 +105,14 @@ export function checkLockfileDrift(input: DriftInput): CheckFinding[] {
     }
     for (const [name, { spec }] of declared) {
       const lockedSpec = locked.get(name);
+      const resolved = lock.packages?.[`node_modules/${name}`]?.version;
       if (lockedSpec === undefined) problems.push(`\`${name}\` is in package.json but missing from the lockfile`);
-      else if (lockedSpec !== spec) problems.push(`\`${name}\` is \`${spec}\` in package.json but \`${lockedSpec}\` in the lockfile`);
-      else if (!lock.packages?.[`node_modules/${name}`]) problems.push(`\`${name}\` has no resolved version in the lockfile`);
+      else if (!resolved) problems.push(`\`${name}\` has no resolved version in the lockfile`);
+      else if (!satisfiesSpec(resolved, spec)) problems.push(`\`${name}\` is \`${spec}\` in package.json but the lockfile resolves ${resolved}`);
+      else if (lockedSpec !== spec) stale.push(`\`${name}\` is \`${spec}\` in package.json but recorded as \`${lockedSpec}\` in the lockfile (the locked ${resolved} still fits)`);
     }
     for (const name of locked.keys()) {
-      if (!declared.has(name)) problems.push(`\`${name}\` is in the lockfile but was removed from package.json`);
+      if (!declared.has(name)) stale.push(`\`${name}\` is in the lockfile but was removed from package.json`);
     }
   } else if (lock.dependencies) {
     // lockfileVersion 1: no record of the declared specs, only resolved packages.
@@ -103,11 +121,29 @@ export function checkLockfileDrift(input: DriftInput): CheckFinding[] {
     }
   }
 
-  if (problems.length === 0) return [];
+  const where = input.dir ? `\`${input.dir}\`` : "this project";
+  if (problems.length === 0) {
+    if (stale.length === 0) return [];
+    return [
+      {
+        severity: "INFO",
+        category: "dependencies",
+        title: "package-lock.json is out of date with package.json",
+        description: [
+          `Installs of ${where} still work — every locked version satisfies package.json — but the lockfile's record of it is stale, so the next \`npm install\` will rewrite it in an unrelated change:`,
+          "",
+          ...stale.slice(0, 8).map((p) => `- ${p}`),
+          ...(stale.length > 8 ? [`- …and ${stale.length - 8} more`] : []),
+        ].join("\n"),
+        filePath: at(input.dir, "package-lock.json"),
+        recommendation: "Run `npm install` in this directory and commit the updated package-lock.json.",
+        confidence: 0.9,
+      },
+    ];
+  }
 
   const shown = problems.slice(0, 8);
   const more = problems.length - shown.length;
-  const where = input.dir ? `\`${input.dir}\`` : "this project";
   return [
     {
       severity: "MEDIUM",

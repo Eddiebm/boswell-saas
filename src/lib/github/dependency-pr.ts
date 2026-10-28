@@ -103,12 +103,17 @@ export async function createDependencyFixPullRequest(input: {
   const { data: baseRef } = await octokit.rest.git.getRef({ owner, repo, ref: `heads/${input.defaultBranch}` });
   const headSha = baseRef.object.sha;
 
+  // The patch was computed from both files, so both must be unchanged — even when only the lockfile is written.
+  const sources = [
+    { path: fix.lockfilePath, baseBlobSha: fix.baseLockfileBlobSha },
+    { path: fix.packageJsonPath, baseBlobSha: fix.basePackageJsonBlobSha },
+  ];
+  for (const source of sources) {
+    if ((await currentBlobSha(octokit, owner, repo, source.path, headSha)) !== source.baseBlobSha) throw new StaleDependencyFixError(source.path);
+  }
+
   const updates: FileUpdate[] = [{ path: fix.lockfilePath, baseBlobSha: fix.baseLockfileBlobSha, content: fix.patchedLockfile }];
   if (fix.patchedPackageJson) updates.push({ path: fix.packageJsonPath, baseBlobSha: fix.basePackageJsonBlobSha, content: fix.patchedPackageJson });
-
-  for (const u of updates) {
-    if ((await currentBlobSha(octokit, owner, repo, u.path, headSha)) !== u.baseBlobSha) throw new StaleDependencyFixError(u.path);
-  }
 
   const { data: headCommit } = await octokit.rest.git.getCommit({ owner, repo, commit_sha: headSha });
   const tree = [];

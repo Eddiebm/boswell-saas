@@ -76,10 +76,16 @@ describe("dependency fix PR", () => {
     expect(rest.git.createRef).not.toHaveBeenCalled();
   });
 
-  it("only touches package.json when a pin was raised", async () => {
-    const { octokit, rest } = mockOctokit({ "package-lock.json": fix.baseLockfileBlobSha, "package.json": "changed" });
+  it("refuses a lockfile-only fix when package.json changed since the audit", async () => {
+    const { octokit, rest } = mockOctokit({ "package-lock.json": fix.baseLockfileBlobSha, "package.json": "narrowed-a-range" });
+    const lockfileOnly = { ...fix, patchedPackageJson: null, pinBumps: [] };
+    await expect(createDependencyFixPullRequest({ octokit, owner: "o", repo: "r", defaultBranch: "main", fix: lockfileOnly })).rejects.toBeInstanceOf(StaleDependencyFixError);
+    expect(rest.git.createBlob).not.toHaveBeenCalled();
+  });
+
+  it("only writes package.json when a pin was raised", async () => {
+    const { octokit, rest } = mockOctokit({ "package-lock.json": fix.baseLockfileBlobSha, "package.json": fix.basePackageJsonBlobSha });
     await createDependencyFixPullRequest({ octokit, owner: "o", repo: "r", defaultBranch: "main", fix: { ...fix, patchedPackageJson: null, pinBumps: [] } });
-    expect(rest.repos.getContent).toHaveBeenCalledTimes(1);
     expect(rest.git.createBlob).toHaveBeenCalledTimes(1);
   });
 
