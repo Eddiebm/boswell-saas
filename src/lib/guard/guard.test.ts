@@ -1,9 +1,29 @@
 import { createHmac } from "node:crypto";
 import type { Octokit } from "@octokit/rest";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { compareGuard, GUARD_MARKER, guardComment, type GuardFinding } from "@/lib/guard/compare";
-import { postStatus, upsertPrComment } from "@/lib/guard/service";
+import { postStatus, queueGuardRun, upsertPrComment } from "@/lib/guard/service";
 import { guardTarget, verifySignature } from "@/lib/guard/webhook";
+
+/** Fake drizzle: `select` finds a queued run; `update` reports whether it was still queued. */
+const db = vi.hoisted(() => ({ waiting: true, stillQueued: true, inserted: 0, updated: 0 }));
+vi.mock("@/lib/db", () => {
+  const chain = (result: () => unknown) => {
+    const c: Record<string, unknown> = {};
+    for (const m of ["from", "where", "limit", "set", "values"]) c[m] = () => c;
+    c.returning = async () => result();
+    c.then = (resolve: (v: unknown) => void) => resolve(result());
+    return c;
+  };
+  return {
+    requireDb: () => ({
+      select: () => chain(() => (db.waiting ? [{ id: "queued-run" }] : [])),
+      update: () => chain(() => (db.updated++, db.stillQueued ? [{ id: "queued-run" }] : [])),
+      insert: () => chain(() => (db.inserted++, [{ id: "new-run" }])),
+    }),
+  };
+});
+vi.mock("@/lib/worker/trigger-worker", () => ({ triggerAuditWorkerDispatch: async () => {} }));
 
 describe("webhook signature", () => {
   const body = '{"zen":"Keep it logically awesome."}';
@@ -74,6 +94,17 @@ describe("compareGuard", () => {
     expect(fresh.newReview).toHaveLength(1);
   });
 
+  it("fails when an existing finding becomes a blocker", () => {
+    // A vulnerable package moved from dev to production dependencies: same identity, MEDIUM → HIGH.
+    const dev = f({ ruleId: "deps.vulnerable", category: "dependencies", severity: "MEDIUM", title: "Vulnerable dependency: lodash@4.17.15", filePath: "package-lock.json" });
+    const prod = { ...dev, id: "p", severity: "HIGH" as const };
+    const outcome = compareGuard([dev], [prod]);
+    expect(outcome.state).toBe("failure");
+    expect(outcome.newBlockers).toHaveLength(1);
+    expect(outcome.existingBlockers).toBe(0);
+    expect(compareGuard([prod], [prod]).state).toBe("success");
+  });
+
   it("sets a baseline instead of failing the first run", () => {
     const outcome = compareGuard(null, [f({})]);
     expect(outcome.state).toBe("success");
@@ -108,5 +139,22 @@ describe("guard comment and GitHub calls", () => {
       expect.objectContaining({ sha: "abc", state: "failure", context: "Boswell / Ship Ready", target_url: "https://boswell.example/dashboard/ship-ready" }),
     );
     expect(createCommitStatus.mock.calls[0][0].description).toHaveLength(140);
+  });
+});
+
+describe("queueGuardRun", () => {
+  const repo = { id: "r1", userId: "u1" } as Parameters<typeof queueGuardRun>[0];
+  beforeEach(() => Object.assign(db, { waiting: true, stillQueued: true, inserted: 0, updated: 0 }));
+
+  it("points a still-queued run at the newest commit instead of queueing another", async () => {
+    expect(await queueGuardRun(repo, { sha: "new", prNumber: 4 })).toBe("queued-run");
+    expect(db.inserted).toBe(0);
+  });
+
+  it("queues a new run when the worker claimed the waiting one first", async () => {
+    db.stillQueued = false;
+    expect(await queueGuardRun(repo, { sha: "new", prNumber: 4 })).toBe("new-run");
+    expect(db.updated).toBe(1);
+    expect(db.inserted).toBe(1);
   });
 });

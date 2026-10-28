@@ -9,7 +9,8 @@ import path from "node:path";
 
 export type Ecosystem = "npm" | "PyPI" | "RubyGems";
 export type LockfileKind = "pnpm" | "yarn" | "bun" | "requirements" | "poetry" | "pipfile" | "gemfile";
-export type ParsedLockfile = { path: string; kind: LockfileKind; ecosystem: Ecosystem; packages: Map<string, Set<string>> };
+/** `unresolved`: entries Boswell couldn't pin to a version, so the file can't count as fully audited. */
+export type ParsedLockfile = { path: string; kind: LockfileKind; ecosystem: Ecosystem; packages: Map<string, Set<string>>; unresolved: string[] };
 
 const FILES: Record<string, { kind: LockfileKind; ecosystem: Ecosystem }> = {
   "pnpm-lock.yaml": { kind: "pnpm", ecosystem: "npm" },
@@ -45,7 +46,8 @@ export function parsePnpmLock(text: string) {
     if (!inPackages) continue;
     // v6: `  /name@1.2.3(peer@x):`  v5: `  /name/1.2.3:`  v9: `  name@1.2.3:` (optionally quoted)
     const m = /^ {2}['"]?\/?((?:@[^/\s'"]+\/)?[^@/\s'"(]+)[@/](\d[^:('"\s]*)/.exec(line);
-    if (m) add(map, m[1], m[2]);
+    // v5 appends peers with underscores (`/next/12.0.0_react@17.0.2`); `_` never appears in a real version.
+    if (m) add(map, m[1], m[2].replace(/_.*$/, ""));
   }
   return map;
 }
@@ -74,14 +76,32 @@ export function parseBunLock(text: string) {
   return map;
 }
 
+const REQUIREMENT_PIN = /^([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s*===?\s*([0-9][^\s;,\\]*)/;
+
 export function parseRequirements(text: string) {
   const map = new Map<string, Set<string>>();
   for (const raw of text.split("\n")) {
-    const line = raw.replace(/#.*/, "").trim();
-    const m = /^([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s*===?\s*([0-9][^\s;,]*)/.exec(line);
+    const m = REQUIREMENT_PIN.exec(raw.replace(/#.*/, "").trim());
     if (m) add(map, m[1].toLowerCase(), m[2]);
   }
   return map;
+}
+
+/**
+ * requirements.txt lines Boswell can't audit: ranges (`Django>=3.2`), bare
+ * names, URLs and VCS installs, and `-r` includes it doesn't follow.
+ * Hash continuations, index options and the project's own `-e .` are fine.
+ */
+export function unpinnedRequirements(text: string): string[] {
+  const out: string[] = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/(^|\s)#.*/, "").replace(/\\\s*$/, "").trim();
+    if (!line || REQUIREMENT_PIN.test(line)) continue;
+    if (/^(?:-e|--editable)\s+\.(?:\[[^\]]*\])?\/?$/.test(line)) continue;
+    if (/^-/.test(line) && !/^(?:-e|--editable|-r|--requirement)\b/.test(line)) continue;
+    out.push(line.slice(0, 80));
+  }
+  return out;
 }
 
 export function parsePoetryLock(text: string) {
@@ -163,8 +183,10 @@ export function findLockfiles(repoDir: string): ParsedLockfile[] {
       if (spec.kind === "requirements" && (names.has("poetry.lock") || names.has("Pipfile.lock"))) continue;
       try {
         if (fs.statSync(full).size > MAX_BYTES) continue;
-        const packages = PARSERS[spec.kind](fs.readFileSync(full, "utf8"));
-        if (packages.size) found.push({ path: rel, kind: spec.kind, ecosystem: spec.ecosystem, packages });
+        const text = fs.readFileSync(full, "utf8");
+        const packages = PARSERS[spec.kind](text);
+        const unresolved = spec.kind === "requirements" ? unpinnedRequirements(text) : [];
+        if (packages.size || unresolved.length) found.push({ path: rel, kind: spec.kind, ecosystem: spec.ecosystem, packages, unresolved });
       } catch {
         /* unreadable — skip */
       }
