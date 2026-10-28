@@ -289,5 +289,58 @@ export const demoRepos = [
   },
 ];
 
+export const DEMO_VERIFY_TARGET_ID = "demo-verify-target-1";
+
+export const demoDiscovery = {
+  loginCandidates: [
+    {
+      loginPath: "/api/login",
+      filePath: "src/app/api/login/route.ts",
+      confidence: "high" as const,
+      reason: 'POST handler references "password"',
+    },
+  ],
+  resourceCandidates: [
+    {
+      resourcePathTemplate: "/api/recordings/{id}",
+      filePath: "src/app/api/recordings/[id]/route.ts",
+      confidence: "high" as const,
+      reason: "GET handler reads a resource by id with no visible ownership check in this file",
+    },
+    {
+      resourcePathTemplate: "/api/account/{id}",
+      filePath: "src/app/api/account/[id]/route.ts",
+      confidence: "low" as const,
+      reason: "GET handler for this id already references a user/session check — still worth proving, lower priority",
+    },
+  ],
+};
+
+export const demoVerifyTargets = [
+  {
+    id: DEMO_VERIFY_TARGET_ID,
+    repositoryId: DEMO_REPO_ID,
+    label: "Recording access control",
+    stagingUrl: "https://staging.audiolens.dev",
+    resourcePathTemplate: "/api/recordings/{id}",
+    enabled: true,
+    consentConfirmedAt: "2026-07-01T09:00:00Z",
+    createdAt: "2026-07-01T09:00:00Z",
+  },
+];
+
+export const demoVerifyRuns = [
+  {
+    id: "demo-verify-run-1",
+    targetId: DEMO_VERIFY_TARGET_ID,
+    status: "completed",
+    result: "leak_confirmed",
+    summary:
+      "Account B received a 2xx response containing account A's email when requesting account A's resource. This is a live, proven cross-account access-control leak.",
+    error: null,
+    createdAt: "2026-07-02T10:00:00Z",
+  },
+];
+
 export { answerBrainQuestion } from "@/lib/brain/answer";
 export type { CoachingSections };

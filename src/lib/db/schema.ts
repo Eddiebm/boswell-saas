@@ -12,6 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
+import type { DiscoveryResult } from "@/lib/dynamic-verify/discover";
 
 export const auditStatusEnum = pgEnum("audit_status", [
   "queued",
@@ -148,6 +149,7 @@ export const repositories = pgTable("repositories", {
   description: text("description"),
   healthScore: integer("health_score"),
   slopPercent: real("slop_percent"),
+  discoveryJson: jsonb("discovery_json").$type<DiscoveryResult>(),
   lastAuditAt: timestamp("last_audit_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });
@@ -301,6 +303,13 @@ export const fixQueueItems = pgTable("fix_queue_items", {
   canAutoPr: boolean("can_auto_pr").default(false).notNull(),
   priorityScore: integer("priority_score").notNull(),
   status: fixQueueStatusEnum("status").default("pending").notNull(),
+  /**
+   * Which process produced this item. The audit refresh in
+   * `runQueuedAudit()` deletes+reinserts pending items, but must only
+   * touch the ones it owns — a dynamic-verify leak finding is otherwise
+   * silently wiped on the next audit even though it's still true.
+   */
+  source: text("source").default("audit").notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -418,6 +427,68 @@ export const dependencyEvents = pgTable("dependency_events", {
   toVersion: text("to_version"),
   eventType: text("event_type").notNull(),
   occurredAt: timestamp("occurred_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const verifyRunStatusEnum = pgEnum("verify_run_status", [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+]);
+
+export const verifyResultEnum = pgEnum("verify_result", [
+  "leak_confirmed",
+  "no_leak",
+  "inconclusive",
+]);
+
+/**
+ * A staging-only target for the live access-control verification module.
+ * Never points at production: `consentConfirmedAt` gates every run, and the
+ * engine (`src/lib/dynamic-verify/engine.ts`) only ever issues GET requests.
+ */
+export const verifyTargets = pgTable("verify_targets", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  repositoryId: uuid("repository_id")
+    .notNull()
+    .references(() => repositories.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  stagingUrl: text("staging_url").notNull(),
+  loginPath: text("login_path").notNull(),
+  accountAEmail: text("account_a_email").notNull(),
+  accountAPassword: text("account_a_password").notNull(),
+  accountBEmail: text("account_b_email").notNull(),
+  accountBPassword: text("account_b_password").notNull(),
+  resourcePathTemplate: text("resource_path_template").notNull(),
+  accountAResourceId: text("account_a_resource_id").notNull(),
+  enabled: boolean("enabled").default(true).notNull(),
+  consentConfirmedAt: timestamp("consent_confirmed_at", { mode: "date" }).notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const verifyRuns = pgTable("verify_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  targetId: uuid("target_id")
+    .notNull()
+    .references(() => verifyTargets.id, { onDelete: "cascade" }),
+  repositoryId: uuid("repository_id")
+    .notNull()
+    .references(() => repositories.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  status: verifyRunStatusEnum("status").default("queued").notNull(),
+  result: verifyResultEnum("result"),
+  httpStatus: integer("http_status"),
+  matchedFields: jsonb("matched_fields").$type<string[]>().default([]),
+  summary: text("summary"),
+  error: text("error"),
+  startedAt: timestamp("started_at", { mode: "date" }),
+  finishedAt: timestamp("finished_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });
 
 export const safeFixPolicies = pgTable("safe_fix_policies", {

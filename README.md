@@ -17,6 +17,7 @@ Boswell watches your repositories, understands what changed, remembers engineeri
 | Engineering Brain Q&A | **Templates on Free, LLM on Pro** |
 | Safe-fix PR creation | **Live on Pro** (GitHub branch PR) |
 | GitHub OAuth + audits | **Live** (requires env) |
+| Live access-control verification | **Beta** (Pro, staging targets only) |
 | Stripe billing | **Free + Pro** (requires env) |
 | Demo mode | **Explicit only** (`BOSWELL_DEMO=1`) |
 
@@ -82,6 +83,7 @@ See `docs/` for architecture, deployment, scoring methodology, and safety policy
 - `/dashboard/fix-queue` — Prioritized work
 - `/dashboard/memory` — Engineering memory
 - `/dashboard/brain` — Q&A
+- `/dashboard/verify` — Live access-control verification (beta, Pro)
 - `/dashboard/settings` — Config
 - `/dashboard/billing` — Plans
 - `/dashboard/admin` — System health
