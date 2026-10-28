@@ -21,6 +21,7 @@ export async function triggerAuditWorkerDispatch(): Promise<{ ok: boolean; reaso
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ ref: "main" }),
+      signal: AbortSignal.timeout(10_000),
     },
   );
 
