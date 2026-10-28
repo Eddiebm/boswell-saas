@@ -65,7 +65,9 @@ export function checkAuthorization(files: RepoFile[]): CheckFinding[] {
       });
     }
 
-    if (/(^|\/)admin(\/|\b)/.test(f.path) && !middlewareGuardsAdmin && !ROLE_CHECK.test(f.content) && !ROLE_HELPER.test(f.content) && !headerSecretGuard(f.content)) {
+    // The admin login/logout endpoints are how an admin gets in; they can't require being one already.
+    const adminAuthEndpoint = /(^|\/)admin\/(?:[\w-]+\/)*(?:login|logout|sign-?in|sign-?out|auth|session)(\/|\.|$)/i.test(f.path);
+    if (/(^|\/)admin(\/|\b)/.test(f.path) && !adminAuthEndpoint && !middlewareGuardsAdmin && !ROLE_CHECK.test(f.content) && !ROLE_HELPER.test(f.content) && !headerSecretGuard(f.content)) {
       unguardedAdmin.push({ file: f });
     }
   }

@@ -169,6 +169,9 @@ describe("admin guard recognition", () => {
       "export async function POST() { const op = await requireOperator(); if ('error' in op) return deny(); }",
     ];
     for (const content of guarded) expect(checkAuthorization([file("app/api/admin/x/route.ts", content)])).toEqual([]);
+    // The admin login endpoint can't require an admin.
+    const login = "export async function POST(req) { const { password } = await req.json(); if (password !== process.env.ADMIN_PASSWORD) return deny(); setCookie(); }";
+    expect(checkAuthorization([file("src/app/api/admin/login/route.ts", login)])).toEqual([]);
     const signedInOnly = "export async function POST() { const user = await getCurrentUser(); if (!user) return deny(); await wipe(); }";
     expect(checkAuthorization([file("app/api/admin/x/route.ts", signedInOnly)]).map((f) => f.ruleId)).toEqual(["authz.admin-unguarded"]);
   });
