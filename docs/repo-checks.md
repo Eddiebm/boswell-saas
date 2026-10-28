@@ -51,5 +51,7 @@ which surfaces as an INFO finding rather than a failed audit.
 
 ## Migration
 
-The checks add one table, `dependency_fixes`. Apply it with `npm run db:push`
-before deploying the worker.
+The checks add one table, `dependency_fixes`. Schema changes are applied to
+production automatically by `.github/workflows/db-migrate.yml` when they land
+on main (it can also be run by hand from the Actions tab). Locally, use
+`npm run db:push`.

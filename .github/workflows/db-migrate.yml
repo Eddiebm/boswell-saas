@@ -1,0 +1,39 @@
+name: Database migration
+
+# Applies src/lib/db/schema.ts to the production database whenever a change to
+# it lands on main, so the deployed app and worker never run against a schema
+# that's behind. `drizzle-kit push` runs without --force: anything that would
+# drop or rewrite data stops for confirmation (and fails here, with no TTY)
+# instead of being applied.
+
+on:
+  push:
+    branches: [main]
+    paths: ["src/lib/db/schema.ts"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Apply schema
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx drizzle-kit push --verbose
