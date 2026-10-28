@@ -23,8 +23,9 @@ const LOCAL_HOST = /^(?:localhost|127\.0\.0\.1|0\.0\.0\.0|db|postgres|mysql|redi
 
 const REAL_ENV_FILE = /(^|\/)\.env(?:\.(?:local|production|development|production\.local|development\.local))?$/;
 
+/** Enough to tell which key it is, never enough to use or narrow it down. */
 function mask(value: string) {
-  return value.length <= 10 ? `${value.slice(0, 2)}…` : `${value.slice(0, 6)}…${value.slice(-2)}`;
+  return `${value.slice(0, 4)}… (${value.length} chars)`;
 }
 
 /** JWTs whose payload says `"role": "service_role"` — Supabase's key that bypasses every row-level security rule. */
@@ -39,6 +40,28 @@ function serviceRoleJwts(content: string): Array<{ index: number; token: string 
     }
   }
   return out;
+}
+
+export type SecretHit = { name: string; index: number; value: string; rotate: string };
+
+/** Every live-looking credential in a piece of text. Shared by the working-tree and git-history scans. */
+export function findSecrets(content: string): SecretHit[] {
+  const hits: SecretHit[] = [];
+  for (const p of PATTERNS) {
+    for (const m of content.matchAll(p.re)) hits.push({ name: p.name, index: m.index, value: m[0], rotate: p.rotate });
+  }
+  for (const jwt of serviceRoleJwts(content)) {
+    hits.push({ name: "Supabase service-role key", index: jwt.index, value: jwt.token, rotate: "Supabase → Project Settings → API → generate new JWT secret (this rotates every key)" });
+  }
+  for (const m of content.matchAll(DB_URL)) {
+    if (PLACEHOLDER.test(m[2]) || LOCAL_HOST.test(m[3])) continue;
+    hits.push({ name: "database password", index: m.index, value: m[2], rotate: "reset the database user's password with your database provider" });
+  }
+  return hits;
+}
+
+export function maskSecret(value: string) {
+  return mask(value);
 }
 
 /**
@@ -59,17 +82,7 @@ export function checkHardcodedSecrets(files: RepoFile[]): CheckFinding[] {
     // Tests and fixtures are full of fake credentials shaped like real ones.
     if (isTestFile(f)) continue;
 
-    const hits: Array<{ name: string; index: number; value: string; rotate: string }> = [];
-    for (const p of PATTERNS) {
-      for (const m of f.content.matchAll(p.re)) hits.push({ name: p.name, index: m.index, value: m[0], rotate: p.rotate });
-    }
-    for (const jwt of serviceRoleJwts(f.content)) {
-      hits.push({ name: "Supabase service-role key", index: jwt.index, value: jwt.token, rotate: "Supabase → Project Settings → API → generate new JWT secret (this rotates every key)" });
-    }
-    for (const m of f.content.matchAll(DB_URL)) {
-      if (PLACEHOLDER.test(m[2]) || LOCAL_HOST.test(m[3])) continue;
-      hits.push({ name: "database password", index: m.index, value: m[2], rotate: "reset the database user's password with your database provider" });
-    }
+    const hits = findSecrets(f.content);
 
     for (const hit of hits.slice(0, 5)) {
       out.push({

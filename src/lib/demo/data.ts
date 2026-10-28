@@ -431,5 +431,7 @@ export const demoChecksSummary = {
     emailProvider: "Resend",
     takesPayments: true,
     collectsUserData: true,
+    setsTrackingCookies: false,
+    handlesHealthData: false,
   },
 };

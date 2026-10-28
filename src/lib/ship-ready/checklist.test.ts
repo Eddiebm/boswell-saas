@@ -5,7 +5,7 @@ import { evaluateShipReady, type ShipFinding } from "@/lib/ship-ready/checklist"
 const summary: ChecksSummary = {
   version: 1,
   coverage: { dependencies: "checked", databaseRules: "checked" },
-  facts: { framework: "next", host: "vercel", database: "supabase", emailProvider: null, takesPayments: true, collectsUserData: true },
+  facts: { framework: "next", host: "vercel", database: "supabase", emailProvider: null, takesPayments: true, collectsUserData: true, setsTrackingCookies: false, handlesHealthData: false },
 };
 
 let n = 0;

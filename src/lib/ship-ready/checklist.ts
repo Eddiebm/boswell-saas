@@ -110,7 +110,7 @@ const ITEMS: ItemDef[] = [
     area: "Secrets",
     title: "No secret keys in code or the browser",
     why: "A key in the repo or the front-end bundle can be copied by anyone and used on your bill or your data.",
-    rules: ["secrets.hardcoded", "secrets.public-env"],
+    rules: ["secrets.hardcoded", "secrets.history", "secrets.public-env"],
     categories: ["secrets"],
     blockAt: "HIGH",
     coverage: (ctx) => (ctx.summary ? "checked" : "unverifiable"),
@@ -146,7 +146,10 @@ const ITEMS: ItemDef[] = [
     alwaysBlock: ["deps.lockfile-drift", "deps.lockfile-invalid"],
     coverage: (ctx) => ctx.summary?.coverage.dependencies ?? "unverifiable",
     fix: "auto",
-    steps: () => ["Run `npm audit` locally — Boswell couldn't audit this project's dependencies (it supports npm lockfiles)."],
+    steps: () => [
+      "Boswell couldn't audit every dependency file in this repo (it reads package-lock.json, pnpm-lock.yaml, yarn.lock, bun.lock, requirements.txt, poetry.lock, Pipfile.lock and Gemfile.lock).",
+      "Run your package manager's audit locally (`npm audit`, `pnpm audit`, `pip-audit`, `bundle audit`) and fix anything critical or high.",
+    ],
   },
   {
     id: "code-review",
@@ -205,12 +208,28 @@ const ITEMS: ItemDef[] = [
   {
     id: "legal",
     area: "Legal",
-    title: "Privacy policy in place",
-    why: "Anyone collecting accounts, emails or payments needs one — payment providers and privacy laws expect it.",
-    rules: ["legal.no-privacy-policy"],
+    title: "The legal basics are in place",
+    why: "A privacy policy if you collect personal data, terms and a refund policy if you take payments, and cookie consent if you track EU visitors — payment providers and privacy laws expect them.",
+    rules: ["legal.no-privacy-policy", "legal.no-terms", "legal.no-cookie-consent"],
     blockAt: "LOW",
-    coverage: (ctx) => (!ctx.summary ? "unverifiable" : ctx.facts?.collectsUserData ? "checked" : "not-applicable"),
+    coverage: (ctx) =>
+      !ctx.summary ? "unverifiable" : ctx.facts?.collectsUserData || ctx.facts?.takesPayments || ctx.facts?.setsTrackingCookies ? "checked" : "not-applicable",
     fix: "prompt",
+  },
+  {
+    id: "health-data",
+    area: "Legal",
+    title: "Health data is handled lawfully",
+    why: "Medical data carries its own law (HIPAA in the US): every vendor that touches it needs a signed agreement, and a breach is reportable.",
+    rules: ["compliance.health-data"],
+    blockAt: "HIGH",
+    coverage: (ctx) => (ctx.facts?.handlesHealthData ? "checked" : "not-applicable"),
+    fix: "steps",
+    steps: () => [
+      "Decide with a lawyer whether HIPAA (or a state health-privacy law) applies to your app.",
+      "If it does, get a signed Business Associate Agreement from each vendor that stores or processes the data — hosting, database, email, AI and error monitoring.",
+      "Keep health data out of analytics, logs and error reports, and turn on access logging in your database.",
+    ],
   },
   {
     id: "backups",
@@ -247,9 +266,12 @@ const ITEMS: ItemDef[] = [
     blockAt: "HIGH",
     coverage: () => "unverifiable",
     fix: "steps",
-    steps: () => [
+    steps: (ctx) => [
       "Add a free uptime monitor (UptimeRobot, Better Stack, or a scheduled GitHub Action that pings your URL) checking every 5 minutes.",
       "Point its alerts at your phone or email and test one by pausing the site.",
+      ...(ctx.facts?.database === "supabase"
+        ? ["Supabase pauses free-tier projects after a week without activity, taking your app down with it. Upgrade before launch, or make sure something uses the database daily."]
+        : []),
     ],
   },
   {
