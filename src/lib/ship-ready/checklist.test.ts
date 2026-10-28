@@ -32,7 +32,7 @@ describe("evaluateShipReady", () => {
     // Backups and uptime can never be seen from code (and the live site needs its URL), so a clean repo is "almost", never silently "ready".
     expect(v.state).toBe("almost");
     expect(v.blockers).toBe(0);
-    expect(v.items.filter((i) => i.status === "unverified").map((i) => i.id)).toEqual(["live-site", "backups", "uptime"]);
+    expect(v.items.filter((i) => i.status === "unverified").map((i) => i.id)).toEqual(["live-site", "production-config", "backups", "uptime"]);
     expect(item(v, "backups").steps[0]).toContain("Supabase");
   });
 
@@ -124,5 +124,13 @@ describe("evaluateShipReady thresholds", () => {
     });
     expect(item(v, "dependencies").status).toBe("fail");
     expect(item(v, "config").status).toBe("review");
+  });
+
+  it("passes production settings only when the host was actually read", () => {
+    expect(item(evaluateShipReady({ ...base, findings: [] }), "production-config").status).toBe("unverified");
+    const connected = { ...summary, coverage: { ...summary.coverage, productionEnv: "checked" as const } };
+    expect(item(evaluateShipReady({ ...base, summary: connected, findings: [] }), "production-config").status).toBe("pass");
+    const missing = finding({ ruleId: "deploy.env-missing-prod", category: "deploy", severity: "HIGH", confidence: 0.85 });
+    expect(item(evaluateShipReady({ ...base, summary: connected, findings: [missing] }), "production-config").status).toBe("fail");
   });
 });

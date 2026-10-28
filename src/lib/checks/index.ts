@@ -60,6 +60,10 @@ export type ChecksSummary = {
     /** Set when the audit also checked the deployed app (absent on older audits and when no live URL is set). */
     liveSite?: Coverage;
     smoke?: Coverage;
+    /** Set when a connected provider (Supabase, Neon) reported on backups. */
+    backups?: Coverage;
+    /** Set when a connected Vercel project was compared with the env vars the code reads. */
+    productionEnv?: Coverage;
   };
   facts: StackFacts | null;
 };

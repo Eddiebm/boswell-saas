@@ -5,6 +5,7 @@ import { Badge, Card } from "@/components/ui";
 import { CopyFixPromptButton } from "@/components/copy-fix-prompt-button";
 import { GuardToggle } from "@/components/guard-toggle";
 import { LiveUrlForm } from "@/components/live-url-form";
+import { ProviderConnections } from "@/components/provider-connections";
 import { getShipReady } from "@/lib/ship-ready/data";
 import type { ItemStatus, ShipReadyItem } from "@/lib/ship-ready/checklist";
 import { requireUserId } from "@/lib/session";
@@ -152,6 +153,20 @@ export default async function ShipReadyPage({ searchParams }: Props) {
           </p>
           <div className="mt-3">
             <LiveUrlForm repositoryId={view.guard.repositoryId} liveUrl={view.liveUrl} />
+          </div>
+        </Card>
+      ) : null}
+
+      {view.guard ? (
+        <Card>
+          <h2 className="text-lg font-medium">Connected services</h2>
+          <p className="mt-1 text-sm text-zinc-400">
+            Some launch checks live in dashboards, not code: whether row level security is really on, whether backups exist, whether
+            production has every setting. Connect read-only access and Boswell checks them on every audit. Tokens are stored encrypted and
+            only used to read.
+          </p>
+          <div className="mt-4">
+            <ProviderConnections repositoryId={view.guard.repositoryId} connected={view.providers} />
           </div>
         </Card>
       ) : null}

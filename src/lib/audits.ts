@@ -13,6 +13,7 @@ import {
   scoreSnapshots,
   users,
   verifyTargets,
+  providerConnections,
 } from "@/lib/db/schema";
 import { decryptSecret } from "@/lib/crypto/secrets";
 import { buildCoaching } from "@/lib/coaching/build-coaching";
@@ -290,6 +291,19 @@ async function liveTestAccount(repositoryId: string) {
   }
 }
 
+/** Decrypted provider connections for a repository; ones that can't be decrypted are skipped (and re-entered by the user). */
+async function providerConnectionsFor(repositoryId: string) {
+  const db = requireDb();
+  const rows = await db.select().from(providerConnections).where(eq(providerConnections.repositoryId, repositoryId));
+  return rows.flatMap((row) => {
+    try {
+      return [{ provider: row.provider as "supabase" | "vercel" | "neon", projectRef: row.projectRef, teamId: row.teamId, token: decryptSecret(row.token) }];
+    } catch {
+      return [];
+    }
+  });
+}
+
 export async function runQueuedAudit(auditId: string) {
   const db = requireDb();
   const [run] = await db.select().from(auditRuns).where(eq(auditRuns.id, auditId)).limit(1);
@@ -315,6 +329,7 @@ export async function runQueuedAudit(auditId: string) {
       repoFullName: repo.fullName,
       auditMode: normalizeAuditMode(run.auditMode),
       live: repo.liveUrl ? { url: repo.liveUrl, account: await liveTestAccount(repo.id) } : null,
+      providers: await providerConnectionsFor(repo.id),
     });
 
     await db.insert(auditDocuments).values(
