@@ -51,6 +51,20 @@ describe("checkHardcodedSecrets", () => {
     expect(finding.title).toBe("Database password committed in code");
   });
 
+  it("ignores placeholder passwords, sed patterns, and a PEM header with no key", () => {
+    const pem = ["-----BEGIN", "PRIVATE KEY-----"].join(" ");
+    const keyBody = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7".repeat(2);
+    const quiet = [
+      'DATABASE_URL="postgres://identifier:key@db.prisma.io:5432/postgres"',
+      "DB_PASS=$(echo \"$DB_URL\" | sed -E 's|mysql://[^:]+:([^@]*)@.*|\\1|')",
+      'const url = `postgres://${user}:${pass}@${host}/db`;',
+      `if (pem.startsWith("${pem}")) parsePkcs8(pem);`,
+    ];
+    for (const content of quiet) expect(checkHardcodedSecrets([file("lib/x.ts", content)])).toEqual([]);
+    const [key] = checkHardcodedSecrets([file("lib/sign.ts", `const k = "${pem}\\n${keyBody}\\n-----END PRIVATE KEY-----";`)]);
+    expect(key.title).toBe("Private key committed in code");
+  });
+
   it("flags a committed .env file but not .env.example", () => {
     const findings = checkHardcodedSecrets([file(".env", "DATABASE_URL=postgres://x\nNEXT_PUBLIC_URL=https://a.b\n"), file(".env.example", "DATABASE_URL=\n")]);
     expect(findings).toHaveLength(1);
@@ -60,6 +74,14 @@ describe("checkHardcodedSecrets", () => {
 });
 
 describe("checkDatabaseRules", () => {
+  it("ignores old Supabase migrations in an app that no longer uses the Supabase client", () => {
+    const migrated = checkDatabaseRules([
+      pkg({ "@neondatabase/serverless": "^1" }),
+      file("supabase/migrations/003_neon_migration.sql", "create table orders (id uuid);\nalter table products disable row level security;"),
+    ]);
+    expect(migrated).toEqual({ findings: [], coverage: "not-applicable" });
+  });
+
   it("flags Supabase tables created without row level security", () => {
     const result = checkDatabaseRules([
       pkg({ "@supabase/supabase-js": "^2" }),
@@ -110,6 +132,15 @@ describe("checkMoney", () => {
         file("app/api/stripe/webhook/route.ts", "import Stripe from 'stripe';\nexport async function POST(req) {\n  const event = stripe.webhooks.constructEvent(await req.text(), sig, secret);\n  if (event.type === 'checkout.session.completed') {}\n}"),
       ]),
     ).toEqual([]);
+  });
+
+  it("accepts verification done by the app's own helper", () => {
+    const route = (verify: string) =>
+      checkMoney([file("app/api/stripe/webhook/route.ts", `import Stripe from 'stripe';\nexport async function POST(req) {\n  const sig = req.headers.get('stripe-signature');\n  ${verify}\n  if (event.type === 'checkout.session.completed') {}\n}`)]);
+    expect(route("const event = await constructEvent(payload, sig, process.env.STRIPE_WEBHOOK_SECRET);")).toEqual([]);
+    expect(route("if (!(await verifyStripeSignature(body, sig, secret))) return bad(); const event = JSON.parse(body);")).toEqual([]);
+    expect(route("const verified = verifyStripeWebhook(payload, sig); const event = verified.event;")).toEqual([]);
+    expect(route("const event = JSON.parse(await req.text());").map((f) => f.ruleId)).toEqual(["money.webhook-unverified"]);
   });
 
   it("flags a checkout that takes the amount from the request body", () => {

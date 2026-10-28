@@ -13,12 +13,19 @@ const PATTERNS: Array<{ name: string; re: RegExp; rotate: string }> = [
   { name: "GitHub token", re: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,})\b/g, rotate: "GitHub → Settings → Developer settings → tokens → delete" },
   { name: "Slack token", re: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, rotate: "api.slack.com/apps → your app → reinstall to rotate tokens" },
   { name: "Resend API key", re: /\bre_[A-Za-z0-9]{8,}_[A-Za-z0-9]{16,}\b/g, rotate: "resend.com → API Keys → delete" },
-  { name: "private key", re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g, rotate: "generate a new key pair and revoke the old public key wherever it's trusted" },
+  // The header plus a key body: libraries that parse keys contain the header text alone.
+  { name: "private key", re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----(?:\s|\\[nr])+[A-Za-z0-9+/=]{40,}/g, rotate: "generate a new key pair and revoke the old public key wherever it's trusted" },
 ];
 
 /** A connection string with an inline password that isn't an obvious placeholder or a local dev database. */
 const DB_URL = /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss):\/\/([^:\s"'`/]+):([^@\s"'`]+)@([^/\s"'`:]+)/g;
-const PLACEHOLDER = /^(?:password|pass|secret|changeme|postgres|root|example|your[-_]?\w*|xxx+|\*+|<.*>|\$\{.*\}|\[.*\])$/i;
+const PLACEHOLDER = /^(?:password|pass|pwd|secret|key|changeme|postgres|root|admin|user|test|example|identifier|your[-_]?\w*|my[-_]?(?:pass\w*|secret\w*)|db[-_]?pass\w*|xxx+|\*+|<.*>|\$\{.*\}|\[.*\])$/i;
+/**
+ * Shell `sed` patterns and templates that only look like a URL with a password
+ * (`mysql://[^:]+:([^@]*)@`): user names never contain these, and a real
+ * password doesn't contain a regex character class or a `${…}` placeholder.
+ */
+const notACredential = (user: string, password: string) => /[[\]()|\\{}$]/.test(user) || /\[\^|\$\{|\\/.test(password);
 const LOCAL_HOST = /^(?:localhost|127\.0\.0\.1|0\.0\.0\.0|db|postgres|mysql|redis|host\.docker\.internal)$/i;
 
 const REAL_ENV_FILE = /(^|\/)\.env(?:\.(?:local|production|development|production\.local|development\.local))?$/;
@@ -67,7 +74,7 @@ export function checkHardcodedSecrets(files: RepoFile[]): CheckFinding[] {
       hits.push({ name: "Supabase service-role key", index: jwt.index, value: jwt.token, rotate: "Supabase → Project Settings → API → generate new JWT secret (this rotates every key)" });
     }
     for (const m of f.content.matchAll(DB_URL)) {
-      if (PLACEHOLDER.test(m[2]) || LOCAL_HOST.test(m[3])) continue;
+      if (PLACEHOLDER.test(m[2]) || LOCAL_HOST.test(m[3]) || m[2].length < 6 || notACredential(m[1], m[2])) continue;
       hits.push({ name: "database password", index: m.index, value: m[2], rotate: "reset the database user's password with your database provider" });
     }
 
