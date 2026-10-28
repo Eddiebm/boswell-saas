@@ -71,8 +71,14 @@ export async function queueGuardRun(repo: RepoRow, target: { sha: string | null;
     .where(and(eq(auditRuns.repositoryId, repo.id), eq(auditRuns.trigger, "guard"), eq(auditRuns.status, "queued"), samePr))
     .limit(1);
   if (waiting) {
-    await db.update(auditRuns).set({ targetSha: target.sha }).where(eq(auditRuns.id, waiting.id));
-    return waiting.id;
+    // Only while it's still queued: if the worker claimed it in the meantime it's
+    // checking the older commit, and this one needs its own run.
+    const [updated] = await db
+      .update(auditRuns)
+      .set({ targetSha: target.sha })
+      .where(and(eq(auditRuns.id, waiting.id), eq(auditRuns.status, "queued")))
+      .returning({ id: auditRuns.id });
+    if (updated) return updated.id;
   }
   const [run] = await db
     .insert(auditRuns)
