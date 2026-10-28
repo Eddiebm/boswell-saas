@@ -96,7 +96,7 @@ const ITEMS: ItemDef[] = [
     area: "Data",
     title: "The database rejects strangers",
     why: "Supabase and Firebase keys are public. Without row level security or proper rules, anyone can read or wipe your tables from their browser.",
-    rules: ["db.rls-disabled", "db.firebase-open", "db.service-role-client"],
+    rules: ["db.rls-disabled", "db.firebase-open", "db.service-role-client", "db.client-database", "db.ssl-disabled", "db.neon-advisor", "db.not-pooled"],
     blockAt: "HIGH",
     coverage: (ctx) => ctx.summary?.coverage.databaseRules ?? "unverifiable",
     fix: "prompt",
@@ -179,7 +179,7 @@ const ITEMS: ItemDef[] = [
     area: "Operations",
     title: "The live site works",
     why: "Pages that error, crash in the browser or break on a phone lose visitors before they ever see the product.",
-    rules: ["ops.page-broken", "ops.console-errors", "web.mobile-overflow", "ops.slow-page"],
+    rules: ["ops.page-broken", "ops.console-errors", "web.mobile-overflow", "ops.slow-page", "ops.db-paused", "ops.deploy-failing"],
     blockAt: "HIGH",
     reviewAt: "MEDIUM",
     coverage: (ctx) => ctx.summary?.coverage.smoke ?? "unverifiable",
@@ -192,9 +192,9 @@ const ITEMS: ItemDef[] = [
   {
     id: "config",
     area: "Deploy",
-    title: "Every setting the app needs is documented",
-    why: "An undocumented environment variable is a production outage waiting for the next deploy or the next host.",
-    rules: ["deploy.env-undocumented"],
+    title: "Every setting the app needs is documented and set",
+    why: "A variable the code reads but production doesn't have is an outage; an undocumented one is an outage waiting for the next deploy or host.",
+    rules: ["deploy.env-undocumented", "deploy.env-missing-prod"],
     blockAt: "HIGH",
     reviewAt: "MEDIUM",
     coverage: (ctx) => (ctx.summary ? "checked" : "unverifiable"),
@@ -251,9 +251,10 @@ const ITEMS: ItemDef[] = [
     area: "Operations",
     title: "Database backups are on",
     why: "One bad migration or deleted table without a backup is permanent.",
-    rules: [],
+    rules: ["ops.no-backups", "ops.short-backups", "ops.branch-unprotected"],
     blockAt: "HIGH",
-    coverage: (ctx) => (ctx.facts?.database === "none" ? "not-applicable" : "unverifiable"),
+    reviewAt: "MEDIUM",
+    coverage: (ctx) => ctx.summary?.coverage.backups ?? (ctx.facts?.database === "none" ? "not-applicable" : "unverifiable"),
     fix: "steps",
     steps: (ctx) => {
       switch (ctx.facts?.database) {
@@ -406,7 +407,7 @@ export function evaluateShipReady(input: {
       status,
       findings: shown,
       fix: def.fix,
-      steps: status === "unverified" || def.fix === "steps" ? (def.steps?.(ctx) ?? []) : [],
+      steps: status === "unverified" || (def.fix === "steps" && status !== "pass" && status !== "n/a") ? (def.steps?.(ctx) ?? []) : [],
       prompt: status === "fail" || status === "review" ? promptFor(input.repo, def.title.toLowerCase(), serious) : null,
     };
   });

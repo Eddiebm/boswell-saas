@@ -2,7 +2,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { getAuditForUser } from "@/lib/audits";
 import type { ChecksSummary } from "@/lib/checks";
 import { requireDb } from "@/lib/db";
-import { auditRuns, dependencyFixes, repositories, verifyRuns } from "@/lib/db/schema";
+import { auditRuns, dependencyFixes, providerConnections, repositories, verifyRuns } from "@/lib/db/schema";
 import { getLatestCompletedAuditId, getPrimaryRepoId } from "@/lib/data";
 import { demoChecksSummary, demoFindings, demoVerifyRuns, DEMO_AUDIT_ID } from "@/lib/demo/data";
 import { isDemoMode } from "@/lib/demo/mode";
@@ -21,6 +21,8 @@ export type ShipReadyView = {
   guard: { repositoryId: string; enabled: boolean; lastRun: { at: string | null; description: string | null; commitSha: string | null } | null } | null;
   /** The deployed URL the live checks use. */
   liveUrl: string | null;
+  /** Connected providers (never the tokens). */
+  providers: Array<{ provider: "supabase" | "vercel" | "neon"; projectRef: string }>;
 };
 
 function liveState(result: string | null | undefined): LiveVerifyState {
@@ -75,6 +77,7 @@ export async function getShipReady(userId: string, auditId?: string): Promise<Sh
       needsReaudit: false,
       guard: { repositoryId: "demo-repo-audiolens", enabled: false, lastRun: null },
       liveUrl: null,
+      providers: [],
     };
   }
 
@@ -144,6 +147,12 @@ export async function getShipReady(userId: string, auditId?: string): Promise<Sh
     dependencyFixId: fix?.id ?? null,
     needsReaudit: summary === null,
     liveUrl: repo?.liveUrl ?? null,
+    providers: (
+      await db
+        .select({ provider: providerConnections.provider, projectRef: providerConnections.projectRef })
+        .from(providerConnections)
+        .where(eq(providerConnections.repositoryId, audit.repo.id))
+    ).map((p) => ({ provider: p.provider as "supabase" | "vercel" | "neon", projectRef: p.projectRef })),
     guard: {
       repositoryId: audit.repo.id,
       enabled: Boolean(repo?.guardWebhookId),

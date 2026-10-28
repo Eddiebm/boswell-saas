@@ -1,4 +1,4 @@
-import { isSourceFile } from "@/lib/checks/collect-files";
+import { isSourceFile, isTestFile } from "@/lib/checks/collect-files";
 import { lineOf, type CheckFinding, type RepoFile } from "@/lib/checks/types";
 
 export type DatabaseRulesResult = {
@@ -17,15 +17,82 @@ function usesPackage(files: RepoFile[], name: RegExp) {
  * public by design. A table without row level security, or rules left in
  * "test mode", can be read and rewritten by anyone who opens dev tools.
  */
+const DB_DRIVERS = /from\s+["'](?:pg|postgres|@neondatabase\/serverless|drizzle-orm\/(?:neon-http|neon-serverless|node-postgres|postgres-js)|@prisma\/client|mysql2(?:\/promise)?|mongodb|mongoose|@planetscale\/database|@vercel\/postgres)["']/;
+
+/**
+ * Checks for apps whose database is only meant to be reached from the server
+ * (Neon, plain Postgres, Prisma, Mongo…): a driver pulled into browser code,
+ * TLS turned off, and Neon's direct endpoint used where pooling is needed.
+ */
+function serverDatabaseChecks(files: RepoFile[]): CheckFinding[] {
+  const out: CheckFinding[] = [];
+  for (const f of files) {
+    if (!isSourceFile(f) || !/^\s*["']use client["']/m.test(f.content.slice(0, 200))) continue;
+    const m = DB_DRIVERS.exec(f.content);
+    if (!m) continue;
+    out.push({
+      ruleId: "db.client-database",
+      severity: "CRITICAL",
+      category: "database",
+      title: "Database driver imported into browser code",
+      description: `\`${f.path}\` is a client component and imports a database driver (\`${m[0].replace(/^from\s+/, "")}\`). For it to connect, the connection string — with the database password — has to be in the JavaScript every visitor downloads.`,
+      filePath: f.path,
+      lineStart: lineOf(f.content, m.index),
+      recommendation: "Move the query into a server component, route handler or server action, and pass only the results to the client.",
+      confidence: 0.85,
+    });
+  }
+
+  for (const f of files) {
+    if (isTestFile(f)) continue;
+    const m = /postgres(?:ql)?:\/\/[^\s"'`]*[?&]sslmode=disable/.exec(f.content);
+    if (!m) continue;
+    out.push({
+      ruleId: "db.ssl-disabled",
+      severity: "MEDIUM",
+      category: "database",
+      title: "Database connection with SSL turned off",
+      description: `\`${f.path}\` connects with \`sslmode=disable\`, so the password and every query travel unencrypted between the app and the database.`,
+      filePath: f.path,
+      lineStart: lineOf(f.content, m.index),
+      recommendation: "Use `sslmode=require` (Neon and most hosted Postgres reject unencrypted connections anyway).",
+      confidence: 0.85,
+    });
+    break;
+  }
+
+  // Neon's direct endpoint with a TCP driver in serverless functions: each invocation opens its own connection.
+  const serverless = files.some((f) => f.path.endsWith("package.json") && /"next"\s*:/.test(f.content));
+  const tcpDriver = files.some((f) => isSourceFile(f) && /from\s+["'](?:pg|postgres|drizzle-orm\/(?:node-postgres|postgres-js))["']/.test(f.content));
+  const example = files.find((f) => /(^|\/)\.env\.[\w.]*(?:example|sample|template)$/.test(f.path) && /DATABASE_URL\s*=\s*\S*neon\.tech/.test(f.content));
+  if (serverless && tcpDriver && example && !/DATABASE_URL\s*=\s*\S*-pooler\./.test(example.content)) {
+    out.push({
+      ruleId: "db.not-pooled",
+      severity: "LOW",
+      category: "database",
+      title: "Neon's direct endpoint used from serverless functions",
+      description: `${example.path} points DATABASE_URL at Neon's direct endpoint, and the app uses a TCP Postgres driver from serverless functions. Under traffic each function opens its own connection, and the database starts refusing them.\n\nNeeds review: your production value may already use the pooled endpoint.`,
+      filePath: example.path,
+      recommendation: "Use the pooled connection string (the host with `-pooler`) for the app, or Neon's serverless driver (`@neondatabase/serverless`); keep the direct one for migrations.",
+      confidence: 0.6,
+    });
+  }
+  return out;
+}
+
 export function checkDatabaseRules(files: RepoFile[]): DatabaseRulesResult {
   const findings: CheckFinding[] = [];
   const usesSupabase = usesPackage(files, /"@supabase\/(?:supabase-js|ssr|auth-helpers-[\w-]+)"/) || files.some((f) => f.path.startsWith("supabase/"));
   const usesFirebase = usesPackage(files, /"firebase"\s*:/);
-  if (!usesSupabase && !usesFirebase) return { findings, coverage: "not-applicable" };
+  // Neon's Data API serves tables over HTTP to the browser, so — like Supabase — it's only as safe as RLS.
+  const usesNeonDataApi = usesPackage(files, /"@neondatabase\/(?:neon-js|data-api[\w-]*)"\s*:/) || files.some((f) => isSourceFile(f) && /\.apirest\.[\w.-]*neon|data-api\.neon\.tech/.test(f.content));
+  findings.push(...serverDatabaseChecks(files));
+  if (!usesSupabase && !usesFirebase && !usesNeonDataApi) return { findings, coverage: "not-applicable" };
+  const platform = usesSupabase ? "Supabase" : "Neon Data API";
 
   let sawRules = false;
 
-  if (usesSupabase) {
+  if (usesSupabase || usesNeonDataApi) {
     const sql = files.filter((f) => f.path.endsWith(".sql"));
     const created = new Map<string, { file: RepoFile; index: number }>();
     const secured = new Set<string>();
@@ -48,9 +115,9 @@ export function checkDatabaseRules(files: RepoFile[]): DatabaseRulesResult {
         ruleId: "db.rls-disabled",
         severity: "CRITICAL",
         category: "database",
-        title: `${open.length} Supabase ${open.length === 1 ? "table has" : "tables have"} no row level security`,
+        title: `${open.length} ${platform} ${open.length === 1 ? "table has" : "tables have"} no row level security`,
         description: [
-          "Your Supabase anon key ships to every browser. Without row level security (RLS), anyone holding it can read, change or delete every row in these tables — including other users' data:",
+          `Your ${platform} key ships to every browser. Without row level security (RLS), anyone holding it can read, change or delete every row in these tables — including other users' data:`,
           "",
           ...open.slice(0, 15).map(([table, at]) => `- \`${table}\` — created in ${at.file.path}:${lineOf(at.file.content, at.index)}`),
           ...(open.length > 15 ? [`- …and ${open.length - 15} more`] : []),

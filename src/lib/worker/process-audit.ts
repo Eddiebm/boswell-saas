@@ -7,6 +7,7 @@ import { normalizeAuditMode } from "@/lib/audit-modes";
 import { installBoswellEngine, runBoswellEngine } from "@/lib/worker/boswell-engine";
 import { annotateSiblings, runRepoChecks, type ChecksSummary, type DependencyFix } from "@/lib/checks";
 import { runLiveChecks, type LiveAccount } from "@/lib/live";
+import { runProviderChecks, type ProviderConnection } from "@/lib/providers";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -109,6 +110,8 @@ export async function processAuditJob(input: {
   auditMode?: AuditMode;
   /** The deployed app, when the user has set its URL; the test account is live verification's account B. */
   live?: { url: string; account: LiveAccount | null } | null;
+  /** Read-only connections to the app's Supabase / Vercel / Neon projects. */
+  providers?: ProviderConnection[];
 }): Promise<ProcessAuditResult> {
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   if (!openRouterKey) {
@@ -191,6 +194,11 @@ export async function processAuditJob(input: {
           checks.summary.coverage.liveSite = "unverifiable";
           checks.summary.coverage.smoke = "unverifiable";
         }
+      }
+      if (input.providers?.length) {
+        const providers = await runProviderChecks(input.providers, checks.files);
+        checks.findings.push(...providers.findings);
+        Object.assign(checks.summary.coverage, providers.coverage);
       }
       allFindings = annotateSiblings<ProcessedFinding>([...merged, ...checks.findings], checks.files);
       checked = allFindings.slice(merged.length);

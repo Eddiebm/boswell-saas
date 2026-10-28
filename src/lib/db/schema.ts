@@ -549,3 +549,26 @@ export const dependencyFixes = pgTable("dependency_fixes", {
   prUrl: text("pr_url"),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });
+
+/**
+ * Read-only access to the services a repository's app runs on (Supabase,
+ * Vercel, Neon), used by audits to check what only their dashboards show.
+ * Tokens are encrypted (src/lib/crypto/secrets.ts).
+ */
+export const providerConnections = pgTable("provider_connections", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  repositoryId: uuid("repository_id")
+    .notNull()
+    .references(() => repositories.id, { onDelete: "cascade" }),
+  /** supabase | vercel | neon */
+  provider: text("provider").notNull(),
+  /** Supabase project ref, Vercel project id or name, or Neon project id. */
+  projectRef: text("project_ref").notNull(),
+  teamId: text("team_id"),
+  token: text("token").notNull(),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
