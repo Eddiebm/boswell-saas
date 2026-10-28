@@ -267,6 +267,23 @@ export async function runRepoChecks(
       continue;
     }
     findings.push(...result.findings);
+    if (lock.unresolved.length) {
+      // Partly checked: the pinned entries were looked up, these weren't, so coverage stays unverified.
+      findings.push({
+        ruleId: "deps.audit-unavailable",
+        severity: "INFO",
+        category: "dependencies",
+        title: `${lock.unresolved.length} ${lock.unresolved.length === 1 ? "dependency" : "dependencies"} in ${lock.path} couldn't be checked`,
+        description: `These entries don't pin an exact version, so Boswell can't tell which release you install:\n\n${lock.unresolved
+          .slice(0, 10)
+          .map((u) => `- \`${u}\``)
+          .join("\n")}${lock.unresolved.length > 10 ? `\n- …and ${lock.unresolved.length - 10} more` : ""}`,
+        filePath: lock.path,
+        recommendation: "Pin exact versions (`pip freeze > requirements.txt`, or use a lockfile such as poetry.lock or uv.lock) so every install gets the same, checkable release.",
+        confidence: 1,
+      });
+      continue;
+    }
     if (lock.ecosystem === "npm") auditedDirs.add(lockDir);
     else otherEcosystems.delete(lock.path);
   }
