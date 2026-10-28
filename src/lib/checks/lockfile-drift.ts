@@ -64,6 +64,7 @@ export function checkLockfileDrift(input: DriftInput): CheckFinding[] {
     if (input.otherLockfiles.length > 0) return [];
     return [
       {
+        ruleId: "deps.lockfile-missing",
         severity: "LOW",
         category: "dependencies",
         title: "No lockfile: installs aren't reproducible",
@@ -81,6 +82,7 @@ export function checkLockfileDrift(input: DriftInput): CheckFinding[] {
   } catch {
     return [
       {
+        ruleId: "deps.lockfile-invalid",
         severity: "MEDIUM",
         category: "dependencies",
         title: "package-lock.json is not valid JSON",
@@ -126,6 +128,7 @@ export function checkLockfileDrift(input: DriftInput): CheckFinding[] {
     if (stale.length === 0) return [];
     return [
       {
+        ruleId: "deps.lockfile-stale",
         severity: "INFO",
         category: "dependencies",
         title: "package-lock.json is out of date with package.json",
@@ -146,6 +149,7 @@ export function checkLockfileDrift(input: DriftInput): CheckFinding[] {
   const more = problems.length - shown.length;
   return [
     {
+      ruleId: "deps.lockfile-drift",
       severity: "MEDIUM",
       category: "dependencies",
       title: "package.json and package-lock.json are out of sync",

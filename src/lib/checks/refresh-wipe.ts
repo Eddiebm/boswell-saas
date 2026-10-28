@@ -80,6 +80,7 @@ export function checkRefreshWipe(files: RepoFile[]): CheckFinding[] {
       ? `It's scoped by \`${del.scope.replace(/\s+/g, " ").trim().slice(0, 120)}\`, which doesn't say which feature a row belongs to`
       : "It has no `where`, so it deletes every row in the table";
     out.push({
+      ruleId: "data.refresh-wipe",
       severity: "MEDIUM",
       category: "database",
       title: `Refresh of \`${del.table}\` may delete rows written by another feature`,

@@ -335,6 +335,7 @@ export async function runQueuedAudit(auditId: string) {
               recommendation: f.recommendation,
             }),
             confidence: f.confidence ?? 0.85,
+            ruleId: f.ruleId ?? null,
             autoFixable: enriched.canOpenPr,
           };
         }),
@@ -554,6 +555,7 @@ export async function runQueuedAudit(auditId: string) {
         status: "completed",
         finishedAt: new Date(),
         commitSha: result.commitSha,
+        checksJson: result.checksSummary,
         stack: result.stack,
         costUsd: result.costUsd?.toString(),
         summary: result.summary,

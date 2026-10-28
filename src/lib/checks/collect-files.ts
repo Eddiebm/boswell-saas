@@ -5,10 +5,11 @@ import type { RepoFile } from "@/lib/checks/types";
 const SKIP_DIRS = new Set([
   "node_modules", ".git", ".next", "dist", "build", "out", "coverage", "vendor", ".turbo", ".vercel", ".boswell",
 ]);
-const SOURCE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".prisma", ".css", ".yml", ".yaml"]);
+const SOURCE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".prisma", ".css", ".yml", ".yaml", ".sql", ".rules", ".html", ".mdx"]);
 const NAMED_FILES = new Set([
-  "package.json", "package-lock.json", "README.md", "fly.toml",
+  "package.json", "package-lock.json", "README.md", "fly.toml", "vercel.json", "netlify.toml", "database.rules.json",
   ".env.example", ".env.sample", ".env.template", ".env.local.example", ".env.development.example",
+  ".env", ".env.local", ".env.production", ".env.production.local", ".env.development", ".env.development.local",
 ]);
 const MAX_FILES = 3000;
 const MAX_BYTES = 512 * 1024;
@@ -48,6 +49,10 @@ export function collectRepoFiles(repoDir: string): RepoFile[] {
 }
 
 const TEST_PATH = /(\.(test|spec)\.[cm]?[jt]sx?$)|((^|\/)(__tests__|__mocks__|tests?|e2e|fixtures)\/)/;
+
+export function isTestFile(file: RepoFile): boolean {
+  return TEST_PATH.test(file.path);
+}
 
 export function isSourceFile(file: RepoFile): boolean {
   return /\.[cm]?[jt]sx?$/.test(file.path) && !TEST_PATH.test(file.path);

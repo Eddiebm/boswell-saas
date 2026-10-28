@@ -8,6 +8,7 @@ import { NavMoreMenu } from "@/components/nav-more-menu";
 
 const primaryLinks = [
   { href: "/dashboard", label: "Home" },
+  { href: "/dashboard/ship-ready", label: "Ship Ready" },
   { href: "/dashboard/repos", label: "Repositories" },
   { href: "/dashboard/audits", label: "Audits" },
 ];

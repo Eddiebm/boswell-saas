@@ -86,4 +86,15 @@ describe("runRepoChecks", () => {
     expect(calls).toEqual([]);
     expect(result.findings.map((f) => f.title)).toContain("No .env.example: 3 environment variables are undocumented");
   });
+
+  it("reports a finding once when a monorepo carries two copies of the schema", async () => {
+    const schema = "model User {\n  id String @id\n  password String\n}\n";
+    const dir = repo({
+      "prisma/schema.prisma": schema,
+      "apps/web/prisma/schema.prisma": schema,
+      "apps/web/app/api/me/route.ts": "export async function GET() { const u = await prisma.user.findUnique({ where: { id } }); return Response.json(u); }",
+    });
+    const result = await runRepoChecks(dir, { dependencyAudit: false });
+    expect(result.findings.filter((f) => f.ruleId === "secrets.row-exposure")).toHaveLength(1);
+  });
 });

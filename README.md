@@ -18,6 +18,7 @@ Boswell watches your repositories, understands what changed, remembers engineeri
 | Safe-fix PR creation | **Live on Pro** (GitHub branch PR) |
 | Repo health checks (lockfile drift, vulnerable deps, unconnected integrations, env vars, SSRF/timeouts, secret exposure, data-wiping refreshes, copied bugs) | **Live** — see [docs/repo-checks.md](docs/repo-checks.md) |
 | Dependency fix PR (non-breaking `npm audit fix`, lockfile only) | **Live on Pro** |
+| **Ship Ready** verdict and launch checklist (secrets, database rules, payments, AI costs, dependencies, monitoring, hardening, legal, backups, uptime, email) | **Live** — see [docs/ship-ready.md](docs/ship-ready.md) |
 | GitHub OAuth + audits | **Live** (requires env) |
 | Live access-control verification | **Beta** (Pro, staging targets only) |
 | Stripe billing | **Free + Pro** (requires env) |

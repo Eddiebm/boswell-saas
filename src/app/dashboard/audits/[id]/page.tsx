@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAuditReport, getDependencyFixesForAudit } from "@/lib/data";
 import type { CoachingSections } from "@/lib/coaching/build-coaching";
@@ -120,9 +121,22 @@ export default async function AuditDetailPage({ params }: Params) {
             </Card>
           </section>
 
-          {dependencyFixes.map((fix) => (
-            <DependencyFixCard key={fix.id} fix={fix} />
-          ))}
+          <Link
+            href={`/dashboard/ship-ready?audit=${id}`}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-700 bg-zinc-900/60 p-4 hover:border-zinc-500"
+          >
+            <span>
+              <span className="block font-medium text-white">Is this app ready to launch?</span>
+              <span className="text-sm text-zinc-400">See the Ship Ready checklist for this audit: blockers, what to check, and how to fix each one.</span>
+            </span>
+            <span className="text-sm underline">Open Ship Ready →</span>
+          </Link>
+
+          <div id="dependency-fix" className="space-y-4 scroll-mt-24">
+            {dependencyFixes.map((fix) => (
+              <DependencyFixCard key={fix.id} fix={fix} />
+            ))}
+          </div>
 
           <OwaspTop10Card summary={report.owaspSummary} />
 

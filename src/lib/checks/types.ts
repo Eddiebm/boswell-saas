@@ -9,6 +9,8 @@ export type RepoFile = { path: string; content: string };
  * to confirm report lower and say so in their description.
  */
 export type CheckFinding = {
+  /** Stable identifier of the rule that produced this finding, e.g. `deps.vulnerable`. Ship Ready keys off it. */
+  ruleId: string;
   severity: Severity;
   category: string;
   title: string;

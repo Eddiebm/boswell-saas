@@ -36,6 +36,20 @@ export function findSecretTables(files: RepoFile[]): SecretTable[] {
   return out;
 }
 
+/**
+ * Whether the row read at `hit` is what the route sends back. A query
+ * assigned to a variable counts only if that variable goes into the JSON
+ * whole (`json(user)`, `{ user }`, `{ data: rows }`, `...user`), not when
+ * the route picks fields from it or only uses it to decide something.
+ */
+function rowReachesResponse(content: string, hit: number): boolean {
+  const before = content.slice(Math.max(0, hit - 160), hit);
+  const assigned = /(?:const|let|var)\s+(?:\[\s*(\w+)[^\]]*\]|(\w+))\s*(?::[^=]+)?=\s*(?:await\s+)?[\w.]*$/.exec(before);
+  if (!assigned) return true; // used inline, e.g. `json(await prisma.user.findMany())`
+  const v = escapeRegExp(assigned[1] ?? assigned[2]);
+  return new RegExp(String.raw`\b(?:json|send)\s*\(\s*(?:${v}\s*[,)]|[^)]*?\.\.\.\s*${v}\b|\{(?:[^)]*?,)?\s*${v}\s*[,}]|\{[^)]*?:\s*${v}\s*[,}])`).test(content.slice(hit));
+}
+
 const RETURNS_JSON = /\b(?:NextResponse|Response)\.json\s*\(|\bres\.(?:json|send)\s*\(|\bc\.json\s*\(|\bjson\s*\(/;
 
 /**
@@ -68,9 +82,10 @@ export function checkSecretExposure(files: RepoFile[]): CheckFinding[] {
         const call = findCalls(f.content, new RegExp(`\\w+\\.${escapeRegExp(t.variable)}\\.find(?:Unique|UniqueOrThrow|First|FirstOrThrow|Many)`)).find((c) => !/\b(?:select|omit)\s*:/.test(c.args));
         if (call) hit = call.index;
       }
-      if (hit === undefined) continue;
+      if (hit === undefined || !rowReachesResponse(f.content, hit)) continue;
 
       out.push({
+        ruleId: "secrets.row-exposure",
         severity: "MEDIUM",
         category: "secrets",
         title: `Route may return \`${t.table}\` rows including ${t.columns.map((c) => `\`${c}\``).join(", ")}`,
@@ -98,6 +113,7 @@ export function checkSecretExposure(files: RepoFile[]): CheckFinding[] {
   }
   for (const [name, at] of publicSecrets) {
     out.push({
+      ruleId: "secrets.public-env",
       severity: "HIGH",
       category: "secrets",
       title: `Secret in a public environment variable: ${name}`,
