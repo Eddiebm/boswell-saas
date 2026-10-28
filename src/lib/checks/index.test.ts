@@ -86,4 +86,19 @@ describe("runRepoChecks", () => {
     expect(calls).toEqual([]);
     expect(result.findings.map((f) => f.title)).toContain("No .env.example: 3 environment variables are undocumented");
   });
+
+  it("leaves dependency coverage unverified when requirements.txt has unpinned entries", async () => {
+    const fetchJson = async () => ({ results: [{}] });
+    const gitLog = async () => "";
+    const pinned = repo({ "requirements.txt": "requests==2.32.5\n" });
+    expect((await runRepoChecks(pinned, { fetchJson, gitLog })).summary.coverage.dependencies).toBe("checked");
+
+    const partial = repo({ "requirements.txt": "requests==2.32.5\nDjango>=3.2\n" });
+    const result = await runRepoChecks(partial, { fetchJson, gitLog });
+    expect(result.summary.coverage.dependencies).toBe("unverifiable");
+    expect(result.findings.find((f) => f.ruleId === "deps.audit-unavailable")?.description).toContain("Django>=3.2");
+
+    const unpinnedOnly = repo({ "requirements.txt": "flask\n" });
+    expect((await runRepoChecks(unpinnedOnly, { fetchJson, gitLog })).summary.coverage.dependencies).toBe("unverifiable");
+  });
 });

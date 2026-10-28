@@ -26,11 +26,16 @@ function key(f: GuardFinding) {
  * reported, but don't turn every PR red.
  */
 export function compareGuard(baseline: GuardFinding[] | null, current: GuardFinding[]): GuardOutcome {
-  const before = new Set((baseline ?? []).map(key));
-  const now = new Set(current.map(key));
   const level = (f: GuardFinding) => classifyFinding(f)?.level ?? null;
+  const rank = (l: ReturnType<typeof level> | undefined) => (l === "block" ? 2 : l === "review" ? 1 : 0);
+  // Highest level each finding had on the base. A finding that was there but
+  // got worse (a dev-only vulnerability moved into production dependencies)
+  // is new at its new level.
+  const before = new Map<string, number>();
+  for (const f of baseline ?? []) before.set(key(f), Math.max(before.get(key(f)) ?? 0, rank(level(f))));
+  const now = new Set(current.map(key));
 
-  const isNew = (f: GuardFinding) => baseline !== null && !before.has(key(f));
+  const isNew = (f: GuardFinding) => baseline !== null && (before.get(key(f)) ?? -1) < rank(level(f));
   const newBlockers = current.filter((f) => level(f) === "block" && isNew(f));
   const newReview = current.filter((f) => level(f) === "review" && isNew(f));
   const existingBlockers = current.filter((f) => level(f) === "block" && !isNew(f)).length;

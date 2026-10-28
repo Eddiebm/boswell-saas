@@ -54,13 +54,37 @@ async function auditNpmEcosystem(lock: ParsedLockfile, fetchJson: FetchJson): Pr
   return out;
 }
 
-type OsvVuln = {
+export type OsvVuln = {
   id: string;
   summary?: string;
   database_specific?: { severity?: string };
   severity?: Array<{ type: string; score: string }>;
-  affected?: Array<{ package?: { name?: string }; ranges?: Array<{ events?: Array<{ fixed?: string }> }> }>;
+  affected?: Array<{ package?: { name?: string }; ranges?: Array<{ type?: string; events?: Array<{ fixed?: string }> }> }>;
 };
+
+/** Loose version order for PyPI/RubyGems releases (`2.2`, `3.2.13`); null when either side isn't numeric. */
+function compareLoose(a: string, b: string): number | null {
+  const ca = semver.coerce(a);
+  const cb = semver.coerce(b);
+  return ca && cb ? semver.compare(ca, cb) : null;
+}
+
+/**
+ * The lowest fixed release above every installed vulnerable version. An
+ * advisory can list several fixes (one per release line), and the first is
+ * often an older branch's — recommending it would point below what's installed.
+ */
+export function osvFixedIn(vuln: OsvVuln, name: string, installed: string[]): string | undefined {
+  const fixes = (vuln.affected ?? [])
+    .filter((a) => a.package?.name?.toLowerCase() === name.toLowerCase())
+    .flatMap((a) => a.ranges ?? [])
+    .filter((r) => r.type !== "GIT") // GIT ranges fix by commit hash, not release
+    .flatMap((r) => r.events ?? [])
+    .map((e) => e.fixed)
+    .filter((f): f is string => Boolean(f))
+    .filter((f) => installed.every((v) => (compareLoose(f, v) ?? -1) > 0));
+  return fixes.sort((a, b) => compareLoose(a, b) ?? 0)[0];
+}
 
 function osvSeverity(v: OsvVuln): Severity {
   const label = v.database_specific?.severity?.toUpperCase();
@@ -110,12 +134,7 @@ async function auditOsv(lock: ParsedLockfile, fetchJson: FetchJson): Promise<Vul
     versions: [...h.versions],
     advisories: [...h.ids].map((id) => {
       const d = details.get(id);
-      const fixedIn = d?.affected
-        ?.filter((a) => a.package?.name?.toLowerCase() === name.toLowerCase())
-        .flatMap((a) => a.ranges ?? [])
-        .flatMap((r) => r.events ?? [])
-        .map((e) => e.fixed)
-        .find(Boolean);
+      const fixedIn = d ? osvFixedIn(d, name, [...h.versions]) : undefined;
       return { id, title: d?.summary ?? id, url: `https://osv.dev/vulnerability/${id}`, severity: d ? osvSeverity(d) : "MEDIUM", fixedIn };
     }),
   }));
@@ -143,7 +162,8 @@ export async function auditLockfile(lock: ParsedLockfile, fetchJson: FetchJson =
 
   const findings = vulnerable.map((pkg): CheckFinding => {
     const worst = ORDER.find((s) => pkg.advisories.some((a) => a.severity === s)) ?? "MEDIUM";
-    const fixed = pkg.advisories.map((a) => a.fixedIn).filter(Boolean) as string[];
+    // Name a minimum version only when every advisory has a known fix above what's installed.
+    const fixed = pkg.advisories.every((a) => a.fixedIn) ? pkg.advisories.map((a) => a.fixedIn as string) : [];
     const label = `${pkg.name}@${pkg.versions.join(", ")}`;
     return {
       ruleId: "deps.vulnerable",
@@ -156,7 +176,7 @@ export async function auditLockfile(lock: ParsedLockfile, fetchJson: FetchJson =
         ...(pkg.advisories.length > 6 ? [`- …and ${pkg.advisories.length - 6} more`] : []),
       ].join("\n"),
       filePath: lock.path,
-      recommendation: `Update it (\`${UPDATE_COMMAND[lock.kind](pkg.name)}\`)${fixed.length ? ` to ${fixed.sort((a, b) => (semver.valid(a) && semver.valid(b) ? semver.compare(b, a) : 0))[0]} or later` : " to a version outside the advisories' ranges"}, then run your tests. If something else pins it, update that package instead.`,
+      recommendation: `Update it (\`${UPDATE_COMMAND[lock.kind](pkg.name)}\`)${fixed.length ? ` to ${fixed.sort((a, b) => compareLoose(b, a) ?? 0)[0]} or later` : " to a version outside the advisories' ranges"}, then run your tests. If something else pins it, update that package instead.`,
       confidence: 0.9,
     };
   });

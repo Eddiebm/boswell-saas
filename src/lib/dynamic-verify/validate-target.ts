@@ -32,6 +32,12 @@ function isPrivateOrReservedIpv6(ip: string): boolean {
   if (/^f[cd][0-9a-f]{2}:/.test(lower)) return true; // unique local fc00::/7
   const v4Mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
   if (v4Mapped) return isPrivateOrReservedIpv4(v4Mapped[1]);
+  // The same address as URL parsing writes it: ::ffff:127.0.0.1 → ::ffff:7f00:1
+  const v4MappedHex = lower.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (v4MappedHex) {
+    const [hi, lo] = [parseInt(v4MappedHex[1], 16), parseInt(v4MappedHex[2], 16)];
+    return isPrivateOrReservedIpv4(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+  }
   return false;
 }
 
