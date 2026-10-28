@@ -25,6 +25,7 @@ import { checkLaunchBasics, type StackFacts } from "@/lib/checks/launch-basics";
 import { findLockfiles } from "@/lib/checks/lockfiles";
 import { auditLockfile, type FetchJson } from "@/lib/checks/lockfile-audit";
 import { checkGitHistorySecrets, type GitLog } from "@/lib/checks/git-history";
+import { checkAuthorization } from "@/lib/checks/authz";
 import type { CheckFinding, RepoFile } from "@/lib/checks/types";
 
 export { annotateSiblings } from "@/lib/checks/siblings";
@@ -53,7 +54,13 @@ export type Coverage = "checked" | "unverifiable" | "not-applicable";
  */
 export type ChecksSummary = {
   version: 1;
-  coverage: { dependencies: Coverage; databaseRules: Coverage };
+  coverage: {
+    dependencies: Coverage;
+    databaseRules: Coverage;
+    /** Set when the audit also checked the deployed app (absent on older audits and when no live URL is set). */
+    liveSite?: Coverage;
+    smoke?: Coverage;
+  };
   facts: StackFacts | null;
 };
 
@@ -301,6 +308,7 @@ export async function runRepoChecks(
   findings.push(...safely("refresh-wipe", () => checkRefreshWipe(files)));
   findings.push(...safely("hardcoded-secrets", () => checkHardcodedSecrets(files)));
   findings.push(...safely("money", () => checkMoney(files)));
+  findings.push(...safely("authorization", () => checkAuthorization(files)));
 
   let databaseRules: Coverage = "unverifiable";
   findings.push(

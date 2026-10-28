@@ -29,10 +29,10 @@ const base = { repo: "acme/app", summary, live: "no-leak" as const, auditComplet
 describe("evaluateShipReady", () => {
   it("is Ship Ready only when nothing fails, nothing needs review, and nothing is left to confirm", () => {
     const v = evaluateShipReady({ ...base, findings: [] });
-    // Backups and uptime can never be seen from code, so a clean repo is "almost", never silently "ready".
+    // Backups and uptime can never be seen from code (and the live site needs its URL), so a clean repo is "almost", never silently "ready".
     expect(v.state).toBe("almost");
     expect(v.blockers).toBe(0);
-    expect(v.items.filter((i) => i.status === "unverified").map((i) => i.id)).toEqual(["backups", "uptime"]);
+    expect(v.items.filter((i) => i.status === "unverified").map((i) => i.id)).toEqual(["live-site", "backups", "uptime"]);
     expect(item(v, "backups").steps[0]).toContain("Supabase");
   });
 

@@ -29,7 +29,7 @@ export type VerifyCheckResult = {
   summary: string;
 };
 
-type Session = { cookie?: string; bearer?: string };
+export type Session = { cookie?: string; bearer?: string };
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -39,7 +39,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
  * itself an absolute URL, `new URL(path, base)` would silently ignore
  * `base` and resolve to that other host instead.
  */
-function resolveUrl(base: string, pathOrTemplate: string, id?: string) {
+export function resolveUrl(base: string, pathOrTemplate: string, id?: string) {
   const resolvedPath = id ? pathOrTemplate.replace("{id}", encodeURIComponent(id)) : pathOrTemplate;
   const url = new URL(resolvedPath, base);
   const baseOrigin = new URL(base).origin;
@@ -51,7 +51,7 @@ function resolveUrl(base: string, pathOrTemplate: string, id?: string) {
   return url.toString();
 }
 
-async function login(config: VerifyTargetConfig, email: string, password: string): Promise<Session> {
+export async function login(config: Pick<VerifyTargetConfig, "stagingUrl" | "loginPath">, email: string, password: string): Promise<Session> {
   const url = resolveUrl(config.stagingUrl, config.loginPath);
   const res = await fetch(url, {
     method: "POST",
@@ -80,7 +80,7 @@ async function login(config: VerifyTargetConfig, email: string, password: string
   return { cookie: cookie?.split(";")[0], bearer };
 }
 
-function sessionHeaders(session: Session): HeadersInit {
+export function sessionHeaders(session: Session): HeadersInit {
   const headers: Record<string, string> = {};
   if (session.cookie) headers.Cookie = session.cookie;
   if (session.bearer) headers.Authorization = `Bearer ${session.bearer}`;

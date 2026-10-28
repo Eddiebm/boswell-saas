@@ -6,6 +6,7 @@ import type { AuditMode } from "@/lib/audit-modes";
 import { normalizeAuditMode } from "@/lib/audit-modes";
 import { installBoswellEngine, runBoswellEngine } from "@/lib/worker/boswell-engine";
 import { annotateSiblings, runRepoChecks, type ChecksSummary, type DependencyFix } from "@/lib/checks";
+import { runLiveChecks, type LiveAccount } from "@/lib/live";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -106,6 +107,8 @@ export async function processAuditJob(input: {
   githubToken: string;
   repoFullName: string;
   auditMode?: AuditMode;
+  /** The deployed app, when the user has set its URL; the test account is live verification's account B. */
+  live?: { url: string; account: LiveAccount | null } | null;
 }): Promise<ProcessAuditResult> {
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   if (!openRouterKey) {
@@ -177,6 +180,18 @@ export async function processAuditJob(input: {
     let checksSummary: ChecksSummary | null = null;
     try {
       const checks = await runRepoChecks(repoDir, { dependencyAudit: process.env.BOSWELL_DEPENDENCY_AUDIT !== "0" });
+      if (input.live) {
+        try {
+          const live = await runLiveChecks({ liveUrl: input.live.url, files: checks.files, account: input.live.account });
+          checks.findings.push(...live.findings);
+          checks.summary.coverage.liveSite = live.coverage.liveSite;
+          checks.summary.coverage.smoke = live.coverage.smoke;
+        } catch (error) {
+          console.error("[worker] live checks failed", error);
+          checks.summary.coverage.liveSite = "unverifiable";
+          checks.summary.coverage.smoke = "unverifiable";
+        }
+      }
       allFindings = annotateSiblings<ProcessedFinding>([...merged, ...checks.findings], checks.files);
       checked = allFindings.slice(merged.length);
       dependencyFixes = checks.dependencyFixes;

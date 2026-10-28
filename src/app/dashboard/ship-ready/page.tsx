@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
 import { CopyFixPromptButton } from "@/components/copy-fix-prompt-button";
 import { GuardToggle } from "@/components/guard-toggle";
+import { LiveUrlForm } from "@/components/live-url-form";
 import { getShipReady } from "@/lib/ship-ready/data";
 import type { ItemStatus, ShipReadyItem } from "@/lib/ship-ready/checklist";
 import { requireUserId } from "@/lib/session";
@@ -140,6 +141,20 @@ export default async function ShipReadyPage({ searchParams }: Props) {
           </div>
         ) : null}
       </section>
+
+      {view.guard ? (
+        <Card>
+          <h2 className="text-lg font-medium">Live site</h2>
+          <p className="mt-1 text-sm text-zinc-400">
+            Where your app is deployed. Boswell then checks it on every audit: what the public can download (secrets in your JavaScript,
+            .env and .git files, source maps), which API routes answer without a login, and whether every page loads in a real browser on
+            desktop and phone. Read-only — it never submits forms or changes data.
+          </p>
+          <div className="mt-3">
+            <LiveUrlForm repositoryId={view.guard.repositoryId} liveUrl={view.liveUrl} />
+          </div>
+        </Card>
+      ) : null}
 
       {view.guard ? (
         <Card>
