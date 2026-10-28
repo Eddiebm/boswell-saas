@@ -163,6 +163,9 @@ describe("checkSecretExposure", () => {
     // Picked fields, or a row only used to decide something.
     expect(route("const rows = await db.select().from(users); return NextResponse.json(rows.map((r) => ({ id: r.id })));")).toEqual([]);
     expect(route("const [user] = await db.select().from(users).limit(1); if (user) await send(user.email); return Response.json({ ok: true });")).toEqual([]);
+    // A query chain split across lines.
+    expect(route("const [user] = await db\n    .select()\n    .from(users)\n    .limit(1);\nawait openPr(user.name);\nreturn NextResponse.json({ ok: true });")).toEqual([]);
+    expect(route("const [user] = await db\n    .select()\n    .from(users);\nreturn NextResponse.json(user);")).toHaveLength(1);
     // Whole, wrapped, spread, or inline.
     expect(route("const rows = await db.select().from(users); return NextResponse.json({ data: rows });")).toHaveLength(1);
     expect(route("const [user] = await db.select().from(users); return NextResponse.json({ user });")).toHaveLength(1);
