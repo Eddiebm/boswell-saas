@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import { SENTRY_DATA_COLLECTION } from "@/lib/monitoring-config";
 
 /**
  * Server and edge error reporting. Does nothing until SENTRY_DSN is set, so
@@ -10,17 +11,7 @@ export function register() {
     dsn: process.env.SENTRY_DSN,
     environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
     tracesSampleRate: 0.1,
-    // Boswell handles customer source code and GitHub identities: send the error and stack, nothing about the request.
-    dataCollection: {
-      userInfo: false,
-      cookies: false,
-      httpHeaders: false,
-      httpBodies: [],
-      urlQueryParams: false,
-      databaseQueryData: false,
-      stackFrameVariables: false,
-      genAI: { inputs: false, outputs: false },
-    },
+    dataCollection: SENTRY_DATA_COLLECTION,
   });
 }
 

@@ -1,5 +1,14 @@
 import { processWorkerTick, recoverStaleAudits } from "../src/lib/audits";
 import { processVerifyWorkerTick } from "../src/lib/dynamic-verify/run";
+import { flushMonitoring, initWorkerMonitoring, reportError } from "../src/lib/monitoring";
+
+initWorkerMonitoring();
+
+/** Exiting straight away would drop error reports still being sent. */
+async function exit(code: number): Promise<never> {
+  await flushMonitoring();
+  process.exit(code);
+}
 
 async function main() {
   await recoverStaleAudits();
@@ -13,7 +22,7 @@ async function main() {
         error: "error" in result ? result.error : undefined,
       }),
     );
-    process.exit(result.ok ? 0 : 1);
+    await exit(result.ok ? 0 : 1);
   }
 
   const verifyResult = await processVerifyWorkerTick();
@@ -26,13 +35,15 @@ async function main() {
         error: "error" in verifyResult ? verifyResult.error : undefined,
       }),
     );
-    process.exit(verifyResult.ok ? 0 : 1);
+    await exit(verifyResult.ok ? 0 : 1);
   }
 
   console.log(JSON.stringify({ processed: false, message: "No queued audits or verification runs" }));
+  await flushMonitoring();
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
   console.error(error);
-  process.exit(1);
+  reportError(error, { component: "worker" });
+  await exit(1);
 });

@@ -35,6 +35,7 @@ import { processAuditJob } from "@/lib/worker/process-audit";
 import { runGuardAudit } from "@/lib/guard/run";
 import { sendAuditAlert } from "@/lib/alerts/audit-alerts";
 import { triggerAuditWorkerDispatch } from "@/lib/worker/trigger-worker";
+import { reportError } from "@/lib/monitoring";
 
 export async function listAuditsForUser(userId: string) {
   const db = requireDb();
@@ -619,6 +620,7 @@ export async function runQueuedAudit(auditId: string) {
     await incrementAuditUsage(run.userId);
     return { ok: true as const };
   } catch (error) {
+    reportError(error, { component: "audit", runId: run.id });
     const message = error instanceof Error ? error.message : "Audit failed";
     await db
       .update(auditRuns)

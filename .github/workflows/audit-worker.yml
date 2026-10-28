@@ -49,6 +49,8 @@ jobs:
           # Decrypts staging test-account passwords and provider tokens; must match the web app's value.
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
           BOSWELL_ENCRYPTION_KEY: ${{ secrets.BOSWELL_ENCRYPTION_KEY }}
+          # Error reports for failed audits, guard runs and verification runs; off when unset.
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           AUTH_URL: https://boswell-saas.vercel.app
           BOSWELL_CLOUD_WORKER: "1"
           BOSWELL_PYTHON: python
