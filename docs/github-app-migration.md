@@ -57,8 +57,12 @@ Every call site, so nothing is missed:
     can't push code.
 - Account permissions: Email addresses: read.
 - Events: `installation`, `installation_repositories`, `push`, `pull_request`.
-- Setup and callback URLs on the app; tick *Request user authorization
-  (OAuth) during installation* and *Expire user authorization tokens*.
+- Callback URL (Auth.js sign-in) and a separate setup URL. Leave *Request
+  user authorization (OAuth) during installation* **off**: with it on,
+  GitHub doesn't allow a setup URL and sends installs to the OAuth callback
+  instead. The user is already signed in to Boswell through this app, so
+  the setup route has their token without a second authorization. Tick
+  *Expire user authorization tokens*.
 
 Fix PRs are the only feature that writes code, so they shouldn't force
 write access on everyone. **Recommendation:** a second, optional app,
@@ -72,16 +76,20 @@ write access to use a read-only audit.)
 ## How tokens work after the move
 
 1. **Sign in** uses the Boswell app's client id/secret with the same Auth.js
-   GitHub provider. GitHub Apps ignore scopes: the user token can only see
-   what the user has installed the app on. Boswell stops reading it for
-   repository work.
+   GitHub provider. GitHub Apps ignore scopes: the user token (`ghu_…`) can
+   only see what the user has installed the app on. Boswell uses it only to
+   list installations and their repos, never to clone or write. It expires
+   after 8 hours, and Auth.js doesn't refresh it for database sessions, so a
+   small helper swaps in a new one from the stored `refresh_token` when it
+   has expired, or sends the user through sign-in again if that fails.
 2. **Connect repositories** sends the user to
    `https://github.com/apps/<slug>/installations/new`. GitHub returns to the
    setup URL with `installation_id`.
 3. **Check ownership before linking.** An `installation_id` in a URL proves
-   nothing: anyone could paste someone else's. Call `GET /user/installations`
-   with the signed-in user's token and link only an id that appears there.
-   Carry a `state` value through the round trip as well.
+   nothing: anyone could paste someone else's. The setup route requires a
+   Boswell session, calls `GET /user/installations` with that user's
+   (refreshed) app token, and links only an id that appears there. Carry a
+   `state` value through the round trip as well.
 4. **Per job**, mint an installation token with the app's private key (a JWT
    that lasts 10 minutes, then `POST /app/installations/{id}/access_tokens`).
    Narrow it to `repository_ids: [repo.githubId]` and the permissions the job
@@ -106,7 +114,10 @@ write access to use a read-only audit.)
 - Later, and destructive, so applied by hand rather than by the db-migrate
   workflow:
   - drop `repositories.guard_webhook_id` and `guard_secret`;
-  - clear `accounts.access_token` / `refresh_token` for `provider = 'github'`.
+  - clear the **legacy** OAuth tokens only. App user tokens live in the same
+    `accounts` rows (`provider = 'github'`) and are still needed, so match
+    the old ones by their `gho_` prefix (app user tokens start `ghu_`) or by
+    `scope` containing `repo`, and null `access_token` on those rows alone.
 
 ## Code changes
 
@@ -155,7 +166,8 @@ write access to use a read-only audit.)
    *Reconnect* and stops auditing after a cut-off date, announced in the
    app and by email.
 5. **Remove the legacy path.** Delete the OAuth fallback and the old webhook
-   route, and clear the stored GitHub tokens. Users can then revoke the old
+   route, and clear the legacy `gho_` tokens (not the app's `ghu_` ones).
+   Users can then revoke the old
    OAuth App at <https://github.com/settings/applications>; mention this in
    the email.
 
