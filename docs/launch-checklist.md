@@ -28,6 +28,8 @@ Set on Vercel (and GitHub Actions secrets for worker-side alerts):
 | `RESEND_API_KEY` | re_... |
 | `ALERT_FROM_EMAIL` | Boswell <alerts@yourdomain.com> |
 
+`ADMIN_ALERT_EMAIL` is also the owner check for `/dashboard/admin` (system status): only the signed-in user whose GitHub email matches it can open that page. Use the email your GitHub account signs in with. If it's unset, nobody can open it.
+
 When configured, Boswell emails you when:
 
 - An audit stays **queued > 5 minutes**
