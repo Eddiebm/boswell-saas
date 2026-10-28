@@ -3,6 +3,14 @@ import { lineOf, type CheckFinding, type RepoFile } from "@/lib/checks/types";
 
 const STRIPE_EVENTS = /checkout\.session\.completed|customer\.subscription\.\w+|invoice\.(?:paid|payment_\w+)|payment_intent\.\w+/;
 const STRIPE_VERIFIED = /\.constructEvent(?:Async)?\s*\(|verifyHeader\s*\(|generateTestHeaderString/;
+/**
+ * Verification behind the app's own helper: `constructEvent(...)` re-exported
+ * from lib/stripe, `verifyStripeSignature(...)`, `verifyWebhook(...)`, or any
+ * verify call in a route that reads the stripe-signature header.
+ */
+const STRIPE_VERIFIED_HELPER = /\b\w*(?:constructEvent|[vV]erify\w*(?:Stripe|Webhook|Signature|Sig|Event))\w*\s*\(/;
+const verifiesStripe = (content: string) =>
+  STRIPE_VERIFIED.test(content) || STRIPE_VERIFIED_HELPER.test(content) || (/stripe-signature/i.test(content) && /\b\w*[vV]erif\w*\s*\(/.test(content));
 
 /** Paid AI and media APIs — a route that calls one spends the app owner's money on every request. */
 const AI_USAGE =
@@ -36,7 +44,7 @@ export function checkMoney(files: RepoFile[]): CheckFinding[] {
     if (!isSourceFile(f) || !isRouteHandler(f)) continue;
 
     const event = STRIPE_EVENTS.exec(f.content);
-    if (event && /stripe/i.test(f.content) && !STRIPE_VERIFIED.test(f.content)) {
+    if (event && /stripe/i.test(f.content) && !verifiesStripe(f.content)) {
       out.push({
         ruleId: "money.webhook-unverified",
         severity: "CRITICAL",

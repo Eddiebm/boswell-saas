@@ -99,6 +99,19 @@ describe("checkOutbound", () => {
     expect(ssrf[0].confidence).toBeLessThan(0.8);
   });
 
+  it("treats a template on a constant base as fixed, unless the path could change the host", () => {
+    const route = (lines: string[]) =>
+      checkOutbound([file("app/api/p/route.ts", ["export async function GET(req: Request) {", "  const path = new URL(req.url).searchParams.get('path');", ...lines, "}"].join("\n"))]).filter((f) =>
+        f.title.startsWith("Possible SSRF"),
+      );
+    // Literal base with a path, env/literal host followed by "/", and new URL() over such a template.
+    expect(route(["  const PC = 'https://nubela.co/proxycurl/api';", "  await fetch(`${PC}${path}`, { signal });"])).toEqual([]);
+    expect(route(["  const BACKEND = process.env.BACKEND_URL || 'http://localhost:8000';", "  await fetch(`${BACKEND}/${path}`, { signal });"])).toEqual([]);
+    expect(route(["  const PC = 'https://nubela.co/proxycurl/api';", "  const url = new URL(`${PC}${path}`);", "  await fetch(url.toString(), { signal });"])).toEqual([]);
+    // A bare host with the caller's path glued on: `?path=@evil.com` changes the host.
+    expect(route(["  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';", "  await fetch(`${backendUrl}${path}`, { signal });"])).toHaveLength(1);
+  });
+
   it("trusts routes that validate destinations", () => {
     const findings = checkOutbound([
       file("app/api/preview/route.ts", "const ALLOWED_HOSTS = ['a.com'];\nexport async function GET(req) { const u = new URL(req.nextUrl.searchParams.get('u')); if (!ALLOWED_HOSTS.includes(u.hostname)) return; await fetch(u); }"),
@@ -143,6 +156,18 @@ describe("checkSecretExposure", () => {
       file("app/api/b/route.ts", "const [u] = await db.select().from(users); const { passwordHash, ...safe } = u; return NextResponse.json(safe);"),
     ]);
     expect(findings).toEqual([]);
+  });
+
+  it("only flags rows that go into the response whole", () => {
+    const route = (body: string) => checkSecretExposure([schema, file("app/api/x/route.ts", body)]);
+    // Picked fields, or a row only used to decide something.
+    expect(route("const rows = await db.select().from(users); return NextResponse.json(rows.map((r) => ({ id: r.id })));")).toEqual([]);
+    expect(route("const [user] = await db.select().from(users).limit(1); if (user) await send(user.email); return Response.json({ ok: true });")).toEqual([]);
+    // Whole, wrapped, spread, or inline.
+    expect(route("const rows = await db.select().from(users); return NextResponse.json({ data: rows });")).toHaveLength(1);
+    expect(route("const [user] = await db.select().from(users); return NextResponse.json({ user });")).toHaveLength(1);
+    expect(route("const [user] = await db.select().from(users); return NextResponse.json({ ...user, extra: 1 });")).toHaveLength(1);
+    expect(route("return NextResponse.json(await db.select().from(users));")).toHaveLength(1);
   });
 
   it("flags Prisma reads without select/omit", () => {
