@@ -42,3 +42,27 @@ describe("repo check security invariants", () => {
     expect(worker).not.toMatch(/execFileSync\(\s*"(?:npm|npx|yarn|pnpm|node|bun)"/);
   });
 });
+
+describe("live check invariants", () => {
+  const liveSources = fs
+    .readdirSync(path.join(root, "src/lib/live"))
+    .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+    .map((f) => read(`src/lib/live/${f}`));
+
+  it("never sends anything but GET to the customer's site (sign-in reuses live verification's login)", () => {
+    for (const src of liveSources) {
+      expect(src).not.toMatch(/method:\s*["'](?:POST|PUT|PATCH|DELETE)["']/i);
+      // Interacting with the page (typing, clicking, submitting) could change data; reading `msg.type()` is fine.
+      expect(src).not.toMatch(/\.(?:fill|click|press|check|selectOption|setInputFiles)\(|\.type\(\s*[^)\s]/);
+    }
+    expect(read("src/lib/live/http.ts")).toContain('method: "GET"');
+  });
+
+  it("re-validates every redirect hop and keeps the browser away from the worker's secrets", () => {
+    expect(read("src/lib/live/http.ts")).toMatch(/for \(let hop[\s\S]*assertSafeStagingUrl\(url\)/);
+    const smoke = read("src/lib/live/smoke.ts");
+    expect(smoke).toMatch(/env:\s*\{\s*HOME:[^}]*PATH:[^}]*\}/);
+    expect(smoke).not.toMatch(/\.\.\.process\.env/);
+    expect(smoke).toContain("route.abort()");
+  });
+});

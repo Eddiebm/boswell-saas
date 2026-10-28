@@ -151,6 +151,8 @@ export const repositories = pgTable("repositories", {
   healthScore: integer("health_score"),
   slopPercent: real("slop_percent"),
   discoveryJson: jsonb("discovery_json").$type<DiscoveryResult>(),
+  /** The deployed app's public URL, for the live checks (site scan, route sweep, smoke tests). */
+  liveUrl: text("live_url"),
   /** Push guard: the GitHub webhook Boswell created, and its signing secret (encrypted). */
   guardWebhookId: bigint("guard_webhook_id", { mode: "number" }),
   guardSecret: text("guard_secret"),

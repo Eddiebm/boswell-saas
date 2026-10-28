@@ -28,6 +28,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install browser for live checks
+        run: npx playwright-core install --with-deps chromium
+
       - name: Install Boswell engine
         run: |
           python -m pip install --upgrade pip

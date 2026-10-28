@@ -35,7 +35,7 @@ function isPrivateOrReservedIpv6(ip: string): boolean {
   return false;
 }
 
-function isBlockedAddress(address: string): boolean {
+export function isBlockedAddress(address: string): boolean {
   const family = net.isIP(address);
   if (family === 4) return isPrivateOrReservedIpv4(address);
   if (family === 6) return isPrivateOrReservedIpv6(address);

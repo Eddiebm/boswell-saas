@@ -12,7 +12,9 @@ import {
   repositories,
   scoreSnapshots,
   users,
+  verifyTargets,
 } from "@/lib/db/schema";
+import { decryptSecret } from "@/lib/crypto/secrets";
 import { buildCoaching } from "@/lib/coaching/build-coaching";
 import { buildDailyBriefing } from "@/lib/briefing/build-briefing";
 import { enrichFinding } from "@/lib/enrich/finding";
@@ -271,6 +273,23 @@ export async function recoverStuckAudits() {
   await recoverStaleAudits();
 }
 
+/** Live verification's account B (a normal user), reused to check private pages and admin routes on the live site. */
+async function liveTestAccount(repositoryId: string) {
+  const db = requireDb();
+  const [target] = await db
+    .select()
+    .from(verifyTargets)
+    .where(and(eq(verifyTargets.repositoryId, repositoryId), eq(verifyTargets.enabled, true)))
+    .orderBy(desc(verifyTargets.createdAt))
+    .limit(1);
+  if (!target) return null;
+  try {
+    return { loginPath: target.loginPath, email: target.accountBEmail, password: decryptSecret(target.accountBPassword) };
+  } catch {
+    return null;
+  }
+}
+
 export async function runQueuedAudit(auditId: string) {
   const db = requireDb();
   const [run] = await db.select().from(auditRuns).where(eq(auditRuns.id, auditId)).limit(1);
@@ -295,6 +314,7 @@ export async function runQueuedAudit(auditId: string) {
       githubToken: token,
       repoFullName: repo.fullName,
       auditMode: normalizeAuditMode(run.auditMode),
+      live: repo.liveUrl ? { url: repo.liveUrl, account: await liveTestAccount(repo.id) } : null,
     });
 
     await db.insert(auditDocuments).values(

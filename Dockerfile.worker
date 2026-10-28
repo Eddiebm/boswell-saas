@@ -8,6 +8,8 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm ci
+# Chromium for the live smoke tests (pages loaded in a real browser).
+RUN npx playwright-core install --with-deps chromium
 
 COPY . .
 

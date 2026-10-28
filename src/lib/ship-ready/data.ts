@@ -19,6 +19,8 @@ export type ShipReadyView = {
   needsReaudit: boolean;
   /** Push guard state for the repository; null in demo mode. */
   guard: { repositoryId: string; enabled: boolean; lastRun: { at: string | null; description: string | null; commitSha: string | null } | null } | null;
+  /** The deployed URL the live checks use. */
+  liveUrl: string | null;
 };
 
 function liveState(result: string | null | undefined): LiveVerifyState {
@@ -72,6 +74,7 @@ export async function getShipReady(userId: string, auditId?: string): Promise<Sh
       dependencyFixId: "demo-dependency-fix-1",
       needsReaudit: false,
       guard: { repositoryId: "demo-repo-audiolens", enabled: false, lastRun: null },
+      liveUrl: null,
     };
   }
 
@@ -93,7 +96,7 @@ export async function getShipReady(userId: string, auditId?: string): Promise<Sh
     .where(and(eq(dependencyFixes.auditRunId, id), eq(dependencyFixes.status, "ready")))
     .limit(1);
   const [repo] = await db
-    .select({ fullName: repositories.fullName, guardWebhookId: repositories.guardWebhookId })
+    .select({ fullName: repositories.fullName, guardWebhookId: repositories.guardWebhookId, liveUrl: repositories.liveUrl })
     .from(repositories)
     .where(eq(repositories.id, audit.repo.id))
     .limit(1);
@@ -140,6 +143,7 @@ export async function getShipReady(userId: string, auditId?: string): Promise<Sh
     }),
     dependencyFixId: fix?.id ?? null,
     needsReaudit: summary === null,
+    liveUrl: repo?.liveUrl ?? null,
     guard: {
       repositoryId: audit.repo.id,
       enabled: Boolean(repo?.guardWebhookId),
