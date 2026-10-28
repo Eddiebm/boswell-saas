@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
-import { SENTRY_DATA_COLLECTION } from "@/lib/monitoring-config";
+import { SENTRY_DATA_COLLECTION, scrubEvent } from "@/lib/monitoring-config";
 
 /**
  * Server and edge error reporting. Does nothing until SENTRY_DSN is set, so
@@ -12,6 +12,8 @@ export function register() {
     environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
     tracesSampleRate: 0.1,
     dataCollection: SENTRY_DATA_COLLECTION,
+    beforeSend: scrubEvent,
+    beforeSendTransaction: scrubEvent,
   });
 }
 

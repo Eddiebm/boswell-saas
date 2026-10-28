@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/node";
-import { SENTRY_DATA_COLLECTION } from "@/lib/monitoring-config";
+import { SENTRY_DATA_COLLECTION, scrubEvent } from "@/lib/monitoring-config";
 
 export type WorkerComponent = "audit" | "guard" | "verify" | "repo-checks" | "live-checks" | "worker";
 
@@ -14,6 +14,8 @@ export function initWorkerMonitoring() {
     dsn: process.env.SENTRY_DSN,
     environment: `worker-${process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "production"}`,
     dataCollection: SENTRY_DATA_COLLECTION,
+    beforeSend: scrubEvent,
+    beforeSendTransaction: scrubEvent,
   });
 }
 
