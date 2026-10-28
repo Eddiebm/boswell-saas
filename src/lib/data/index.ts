@@ -86,7 +86,7 @@ export async function getLatestCompletedAuditId(userId: string) {
     })
     .from(auditRuns)
     .innerJoin(repositories, eq(auditRuns.repositoryId, repositories.id))
-    .where(and(eq(auditRuns.userId, userId), eq(auditRuns.status, "completed")))
+    .where(and(eq(auditRuns.userId, userId), eq(auditRuns.status, "completed"), eq(auditRuns.trigger, "manual")))
     .orderBy(desc(auditRuns.finishedAt))
     .limit(1);
   return row ?? null;
@@ -101,7 +101,7 @@ export async function getDashboardBriefing(userId: string) {
   const runs = await db
     .select()
     .from(auditRuns)
-    .where(eq(auditRuns.repositoryId, repoId))
+    .where(and(eq(auditRuns.repositoryId, repoId), eq(auditRuns.trigger, "manual")))
     .orderBy(desc(auditRuns.createdAt))
     .limit(1);
 
@@ -195,7 +195,7 @@ export async function getSlop(repoId: string): Promise<SlopResult> {
   const [run] = await db
     .select()
     .from(auditRuns)
-    .where(and(eq(auditRuns.repositoryId, repoId), eq(auditRuns.status, "completed")))
+    .where(and(eq(auditRuns.repositoryId, repoId), eq(auditRuns.status, "completed"), eq(auditRuns.trigger, "manual")))
     .orderBy(desc(auditRuns.createdAt))
     .limit(1);
   if (!run?.slopJson) return emptySlopResult();

@@ -316,6 +316,21 @@ function promptFor(repo: string, goal: string, findings: ShipFinding[]): string 
   ].join("\n");
 }
 
+/**
+ * How one finding counts towards launch, using the same item rules as the
+ * checklist: "block" (proven and serious enough), "review" (serious but a
+ * pattern match), or null (noted only, or not a launch criterion).
+ */
+export function classifyFinding(f: ShipFinding): { item: string; level: "block" | "review" } | null {
+  if (f.ruleId && !RULED.has(f.ruleId)) return null;
+  const def = ITEMS.find((d) => belongsTo(d, f));
+  if (!def) return null;
+  const always = Boolean(f.ruleId && def.alwaysBlock?.includes(f.ruleId));
+  if (!always && RANK[f.severity] < RANK[def.reviewAt ?? def.blockAt]) return null;
+  const blocks = (always || RANK[f.severity] >= RANK[def.blockAt]) && f.confidence >= PROOF;
+  return { item: def.id, level: blocks ? "block" : "review" };
+}
+
 const HEADLINE = {
   ready: "Ship Ready",
   almost: "No blockers — confirm the rest before launch",

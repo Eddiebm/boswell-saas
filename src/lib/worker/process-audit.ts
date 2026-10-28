@@ -42,7 +42,7 @@ export type ProcessAuditResult = {
   discovery: DiscoveryResult;
 };
 
-function authedCloneUrl(cloneUrl: string, token: string) {
+export function authedCloneUrl(cloneUrl: string, token: string) {
   if (!cloneUrl.startsWith("https://github.com/")) {
     return cloneUrl;
   }

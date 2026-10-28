@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
 import { CopyFixPromptButton } from "@/components/copy-fix-prompt-button";
+import { GuardToggle } from "@/components/guard-toggle";
 import { getShipReady } from "@/lib/ship-ready/data";
 import type { ItemStatus, ShipReadyItem } from "@/lib/ship-ready/checklist";
 import { requireUserId } from "@/lib/session";
@@ -139,6 +140,29 @@ export default async function ShipReadyPage({ searchParams }: Props) {
           </div>
         ) : null}
       </section>
+
+      {view.guard ? (
+        <Card>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-xl">
+              <h2 className="text-lg font-medium">Push guard {view.guard.enabled ? <Badge tone="good">On</Badge> : <Badge tone="neutral">Off</Badge>}</h2>
+              <p className="mt-1 text-sm text-zinc-400">
+                Boswell checks every push to your default branch and every pull request, marks the commit on GitHub, and comments on the PR
+                when a change adds a launch blocker. Pushes to the default branch keep this page up to date — fix something, push, and the
+                verdict updates. Checks only: no AI cost, and nothing in your repo is run.
+              </p>
+              {view.guard.lastRun ? (
+                <p className="mt-2 text-xs text-zinc-500">
+                  Last check{view.guard.lastRun.commitSha ? ` on ${view.guard.lastRun.commitSha.slice(0, 7)}` : ""}
+                  {view.guard.lastRun.at ? ` · ${new Date(view.guard.lastRun.at).toLocaleString()}` : ""}
+                  {view.guard.lastRun.description ? ` · ${view.guard.lastRun.description}` : ""}
+                </p>
+              ) : null}
+            </div>
+            <GuardToggle repositoryId={view.guard.repositoryId} enabled={view.guard.enabled} />
+          </div>
+        </Card>
+      ) : null}
 
       {SECTIONS.map((section) => {
         const items = verdict.items.filter((i) => i.status === section.status);
