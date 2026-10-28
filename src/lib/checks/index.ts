@@ -344,5 +344,11 @@ export async function runRepoChecks(
     },
     facts,
   };
-  return { findings, dependencyFixes, files, summary };
+  // Monorepos often carry two copies of a schema (root and app); the same finding then comes out twice.
+  const seen = new Set<string>();
+  const unique = findings.filter((f) => {
+    const key = `${f.ruleId}|${f.filePath ?? ""}|${f.lineStart ?? ""}|${f.title}`;
+    return !seen.has(key) && Boolean(seen.add(key));
+  });
+  return { findings: unique, dependencyFixes, files, summary };
 }

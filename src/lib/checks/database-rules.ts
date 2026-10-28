@@ -101,7 +101,8 @@ function serverDatabaseChecks(files: RepoFile[]): CheckFinding[] {
 
 export function checkDatabaseRules(files: RepoFile[]): DatabaseRulesResult {
   const findings: CheckFinding[] = [];
-  const usesSupabase = usesPackage(files, /"@supabase\/(?:supabase-js|ssr|auth-helpers-[\w-]+)"/) || files.some((f) => f.path.startsWith("supabase/"));
+  // The client package, not a supabase/ folder: apps that moved to Neon or plain Postgres often keep the old migrations around.
+  const usesSupabase = usesPackage(files, /"@supabase\/(?:supabase-js|ssr|auth-helpers-[\w-]+)"/);
   const usesFirebase = usesPackage(files, /"firebase"\s*:/);
   // Neon's Data API serves tables over HTTP to the browser, so — like Supabase — it's only as safe as RLS.
   const usesNeonDataApi = usesPackage(files, /"@neondatabase\/(?:neon-js|data-api[\w-]*)"\s*:/) || files.some((f) => isSourceFile(f) && /\.apirest\.[\w.-]*neon|data-api\.neon\.tech/.test(f.content));
