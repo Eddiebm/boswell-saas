@@ -178,7 +178,7 @@ describe("checkLaunchBasics", () => {
       pkg({ next: "16", stripe: "^18", resend: "^4" }),
       file("next.config.ts", "export default { productionBrowserSourceMaps: true };"),
     ]);
-    expect(findings.map((f) => f.ruleId)).toEqual(["ops.no-error-monitoring", "web.source-maps", "web.security-headers", "legal.no-privacy-policy"]);
+    expect(findings.map((f) => f.ruleId)).toEqual(["ops.no-error-monitoring", "web.source-maps", "web.security-headers", "legal.no-privacy-policy", "legal.no-terms"]);
     expect(facts).toMatchObject({ framework: "next", emailProvider: "Resend", takesPayments: true, collectsUserData: true });
   });
 

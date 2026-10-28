@@ -10,11 +10,20 @@ const checkSources = fs
   .map((f) => `src/lib/checks/${f}`);
 
 describe("repo check security invariants", () => {
-  it("only the isolated npm runner can spawn processes", () => {
+  it("only the isolated npm runner and the git history scan can spawn processes", () => {
     for (const file of checkSources) {
-      if (file.endsWith("npm-audit.ts")) continue;
+      if (file.endsWith("npm-audit.ts") || file.endsWith("git-history.ts")) continue;
       expect(read(file), file).not.toMatch(/child_process|execSync|spawn\(/);
     }
+  });
+
+  it("the git history scan can't be made to run repository-defined commands", () => {
+    const scan = read("src/lib/checks/git-history.ts");
+    expect(scan).toMatch(/execFile\(\s*"git"/);
+    expect(scan).toContain('"--no-ext-diff"');
+    expect(scan).toContain('"--no-textconv"');
+    expect(scan).toContain('GIT_CONFIG_NOSYSTEM: "1"');
+    expect(scan).not.toMatch(/\.\.\.process\.env/);
   });
 
   it("never lets npm run scripts, install packages, or see the worker's environment", () => {

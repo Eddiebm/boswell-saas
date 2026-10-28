@@ -22,6 +22,9 @@ import { checkHardcodedSecrets } from "@/lib/checks/hardcoded-secrets";
 import { checkDatabaseRules } from "@/lib/checks/database-rules";
 import { checkMoney } from "@/lib/checks/money";
 import { checkLaunchBasics, type StackFacts } from "@/lib/checks/launch-basics";
+import { findLockfiles } from "@/lib/checks/lockfiles";
+import { auditLockfile, type FetchJson } from "@/lib/checks/lockfile-audit";
+import { checkGitHistorySecrets, type GitLog } from "@/lib/checks/git-history";
 import type { CheckFinding, RepoFile } from "@/lib/checks/types";
 
 export { annotateSiblings } from "@/lib/checks/siblings";
@@ -119,10 +122,11 @@ function safely(name: string, run: () => CheckFinding[]): CheckFinding[] {
  */
 export async function runRepoChecks(
   repoDir: string,
-  options: { dependencyAudit?: boolean; exec?: NpmExec } = {},
+  options: { dependencyAudit?: boolean; exec?: NpmExec; fetchJson?: FetchJson; gitLog?: GitLog } = {},
 ): Promise<RepoCheckResult> {
   const files = collectRepoFiles(repoDir);
-  let audited = 0;
+  // Directories whose dependencies were actually audited, by npm or by lockfile lookup.
+  const auditedDirs = new Set<string>();
   const deadline = Date.now() + DEPENDENCY_AUDIT_BUDGET_MS;
   const findings: CheckFinding[] = [];
   const dependencyFixes: DependencyFix[] = [];
@@ -183,7 +187,7 @@ export async function runRepoChecks(
       continue;
     }
 
-    audited++;
+    auditedDirs.add(dir);
     const patched =
       Boolean(result.patchedLockfile || result.patchedPackageJson) &&
       isSoundPatch(result.patchedPackageJson ?? pkgFile.content, result.patchedLockfile ?? lockfile, dir);
@@ -228,6 +232,68 @@ export async function runRepoChecks(
     }
   }
 
+  // pnpm / yarn / bun / Python / Ruby lockfiles: advisory lookups by name and version, no package manager runs.
+  const otherLockfiles = options.dependencyAudit === false ? [] : findLockfiles(repoDir);
+  const otherEcosystems = new Set<string>();
+  for (const lock of otherLockfiles) {
+    const dir = path.posix.dirname(lock.path.split(path.sep).join("/"));
+    const lockDir = dir === "." ? "" : dir;
+    if (lock.ecosystem !== "npm") otherEcosystems.add(lock.path);
+    if (Date.now() > deadline) {
+      findings.push({
+        ruleId: "deps.audit-unavailable",
+        severity: "INFO",
+        category: "dependencies",
+        title: "Dependency audit skipped: time budget used up",
+        description: `Boswell ran out of time before checking ${lock.path}.`,
+        filePath: lock.path,
+        recommendation: "Run your package manager's audit locally.",
+        confidence: 1,
+      });
+      continue;
+    }
+    const result = await auditLockfile(lock, options.fetchJson);
+    if (!result.ok) {
+      findings.push({
+        ruleId: "deps.audit-unavailable",
+        severity: "INFO",
+        category: "dependencies",
+        title: "Dependency audit couldn't run",
+        description: `Boswell couldn't look up advisories for ${lock.path}: ${(result.error ?? "").slice(0, 300)}`,
+        filePath: lock.path,
+        recommendation: "Run your package manager's audit locally.",
+        confidence: 1,
+      });
+      continue;
+    }
+    findings.push(...result.findings);
+    if (lock.unresolved.length) {
+      // Partly checked: the pinned entries were looked up, these weren't, so coverage stays unverified.
+      findings.push({
+        ruleId: "deps.audit-unavailable",
+        severity: "INFO",
+        category: "dependencies",
+        title: `${lock.unresolved.length} ${lock.unresolved.length === 1 ? "dependency" : "dependencies"} in ${lock.path} couldn't be checked`,
+        description: `These entries don't pin an exact version, so Boswell can't tell which release you install:\n\n${lock.unresolved
+          .slice(0, 10)
+          .map((u) => `- \`${u}\``)
+          .join("\n")}${lock.unresolved.length > 10 ? `\n- …and ${lock.unresolved.length - 10} more` : ""}`,
+        filePath: lock.path,
+        recommendation: "Pin exact versions (`pip freeze > requirements.txt`, or use a lockfile such as poetry.lock or uv.lock) so every install gets the same, checkable release.",
+        confidence: 1,
+      });
+      continue;
+    }
+    if (lock.ecosystem === "npm") auditedDirs.add(lockDir);
+    else otherEcosystems.delete(lock.path);
+  }
+
+  try {
+    findings.push(...(await checkGitHistorySecrets(repoDir, files, options.gitLog)));
+  } catch (error) {
+    console.error("[checks] git-history failed", error);
+  }
+
   findings.push(...safely("integrations", () => checkIntegrations(files)));
   findings.push(...safely("env-vars", () => checkEnvVars(files)));
   findings.push(...safely("outbound", () => checkOutbound(files)));
@@ -256,7 +322,12 @@ export async function runRepoChecks(
   const summary: ChecksSummary = {
     version: 1,
     coverage: {
-      dependencies: projects.length === 0 ? "not-applicable" : audited === projects.length ? "checked" : "unverifiable",
+      dependencies:
+        projects.length === 0 && otherLockfiles.length === 0
+          ? "not-applicable"
+          : projects.every((p) => auditedDirs.has(path.posix.dirname(p.path) === "." ? "" : path.posix.dirname(p.path))) && otherEcosystems.size === 0
+            ? "checked"
+            : "unverifiable",
       databaseRules,
     },
     facts,

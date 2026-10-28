@@ -9,12 +9,36 @@ export type StackFacts = {
   emailProvider: string | null;
   takesPayments: boolean;
   collectsUserData: boolean;
+  /** Analytics or ad scripts that set cookies — EU visitors must consent first. (Absent on audits saved before it existed.) */
+  setsTrackingCookies?: boolean;
+  /** Schema names that point at medical records — HIPAA territory in the US. (Absent on older audits.) */
+  handlesHealthData?: boolean;
 };
 
 const ERROR_MONITORING = /"(?:@sentry\/[\w-]+|@bugsnag\/[\w-]+|@honeybadger-io\/[\w-]+|rollbar|@highlight-run\/[\w-]+|@datadog\/browser-(?:rum|logs)|logrocket|newrelic|@logtail\/[\w-]+|@axiomhq\/[\w-]+|posthog-js|@vercel\/otel)"\s*:/;
 
 function allDeps(files: RepoFile[]): string {
   return files.filter((f) => path.posix.basename(f.path) === "package.json" && !f.path.includes("node_modules/")).map((f) => f.content).join("\n");
+}
+
+const TRACKING_DEPS = /"(?:react-ga4?|posthog-js|mixpanel-browser|@segment\/analytics-next|@amplitude\/analytics-browser|@hotjar\/browser|react-facebook-pixel|@intercom\/messenger-js-sdk)"\s*:/;
+const TRACKING_CODE = /googletagmanager\.com|\bgtag\s*\(|<GoogleAnalytics\b|<GoogleTagManager\b|connect\.facebook\.net|\bfbq\s*\(|static\.hotjar\.com|clarity\.ms/;
+const CONSENT = /cookie-?consent|cookiehub|klaro|cookiebot|osano|termly|iubenda|consent-?manager|gtag\s*\(\s*["']consent["']/i;
+const HEALTH_NAMES = /\b(?:patients?|diagnos[ei]s|prescriptions?|medical_records?|medications?|symptoms?|clinical_notes?|lab_results?|health_records?|ehr|phi|treatment_plans?)\b/gi;
+
+function hasPage(files: RepoFile[], slugs: string, heading: RegExp) {
+  const pathRe = new RegExp(`(^|/)(?:${slugs})(?:/page)?\\.(?:[jt]sx?|mdx?|html)$`, "i");
+  return files.some((f) => pathRe.test(f.path) || (/\.(?:[jt]sx|mdx?|html)$/.test(f.path) && heading.test(f.content)));
+}
+
+/** Distinct health-record terms used as table, model or column names (not in prose). */
+function healthTerms(files: RepoFile[]): Set<string> {
+  const terms = new Set<string>();
+  for (const f of files) {
+    if (!/\.(?:sql|prisma)$|(^|\/)(?:schema|models?)\b[^/]*\.[jt]s$/.test(f.path)) continue;
+    for (const m of f.content.matchAll(HEALTH_NAMES)) terms.add(m[0].toLowerCase().replace(/s$/, ""));
+  }
+  return terms;
 }
 
 export function detectStack(files: RepoFile[]): StackFacts {
@@ -29,6 +53,8 @@ export function detectStack(files: RepoFile[]): StackFacts {
     emailProvider,
     takesPayments: has(/"(?:stripe|@stripe\/stripe-js|@lemonsqueezy\/[\w-]+|@paddle\/[\w-]+)"\s*:/),
     collectsUserData: has(/"(?:next-auth|@auth\/[\w-]+|@clerk\/[\w-]+|@supabase\/[\w-]+|firebase|better-auth|lucia|@kinde-oss\/[\w-]+|stripe)"\s*:/) || emailProvider !== null,
+    setsTrackingCookies: TRACKING_DEPS.test(deps) || files.some((f) => /\.(?:[jt]sx?|html)$/.test(f.path) && TRACKING_CODE.test(f.content)),
+    handlesHealthData: healthTerms(files).size >= 2,
   };
 }
 
@@ -106,6 +132,45 @@ export function checkLaunchBasics(files: RepoFile[]): { findings: CheckFinding[]
         confidence: 0.75,
       });
     }
+  }
+
+  if (facts.takesPayments && !hasPage(files, "terms|terms-of-service|tos|terms-and-conditions", /terms (?:of service|and conditions|of use)/i)) {
+    out.push({
+      ruleId: "legal.no-terms",
+      severity: "LOW",
+      category: "legal",
+      title: "No terms of service or refund policy",
+      description: "This app takes payments but has no terms page. Stripe expects your site to show terms and a refund/cancellation policy, and without them you have nothing to point to when a customer disputes a charge.",
+      filePath: "package.json",
+      recommendation: "Add a /terms page covering what customers get, billing and renewal, cancellation and refunds, and acceptable use. Link it in the footer and next to the checkout button.",
+      confidence: 0.75,
+    });
+  }
+
+  if (facts.setsTrackingCookies && !files.some((f) => (f.path.endsWith("package.json") || /\.(?:[jt]sx?|html)$/.test(f.path)) && CONSENT.test(f.content))) {
+    out.push({
+      ruleId: "legal.no-cookie-consent",
+      severity: "LOW",
+      category: "legal",
+      title: "Tracking cookies without a consent banner",
+      description: "The app loads analytics or ad scripts that set cookies (Google Analytics, Meta pixel, PostHog, Hotjar, …) and there's no consent mechanism. In the EU and UK, these cookies need consent before they're set.\n\nNeeds review: if you only have US visitors, or your analytics run cookieless, this may not apply.",
+      filePath: "package.json",
+      recommendation: "Add a consent banner that blocks tracking until the visitor agrees (e.g. vanilla-cookieconsent, or your analytics tool's built-in consent mode), or switch to cookieless analytics such as Vercel Analytics or Plausible.",
+      confidence: 0.6,
+    });
+  }
+
+  if (facts.handlesHealthData) {
+    out.push({
+      ruleId: "compliance.health-data",
+      severity: "HIGH",
+      category: "compliance",
+      title: "The app stores health data",
+      description: `The database schema includes health-record fields (${[...healthTerms(files)].slice(0, 5).join(", ")}). In the US, health data handled for or by healthcare providers is protected by HIPAA, and storing it with vendors who haven't signed a Business Associate Agreement (BAA) is a violation in itself.\n\nNeeds review: wellness apps used directly by consumers are often outside HIPAA, but other health-privacy laws (e.g. Washington's My Health My Data Act) still apply.`,
+      filePath: "package.json",
+      recommendation: "Decide with a lawyer whether HIPAA applies. If it does: sign BAAs with every vendor that touches the data (hosting, database, email, AI providers — many free tiers can't sign one), encrypt it at rest, log access to it, and keep it out of analytics and error reports.",
+      confidence: 0.6,
+    });
   }
 
   return { findings: out, facts };

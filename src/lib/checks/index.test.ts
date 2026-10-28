@@ -87,6 +87,21 @@ describe("runRepoChecks", () => {
     expect(result.findings.map((f) => f.title)).toContain("No .env.example: 3 environment variables are undocumented");
   });
 
+  it("leaves dependency coverage unverified when requirements.txt has unpinned entries", async () => {
+    const fetchJson = async () => ({ results: [{}] });
+    const gitLog = async () => "";
+    const pinned = repo({ "requirements.txt": "requests==2.32.5\n" });
+    expect((await runRepoChecks(pinned, { fetchJson, gitLog })).summary.coverage.dependencies).toBe("checked");
+
+    const partial = repo({ "requirements.txt": "requests==2.32.5\nDjango>=3.2\n" });
+    const result = await runRepoChecks(partial, { fetchJson, gitLog });
+    expect(result.summary.coverage.dependencies).toBe("unverifiable");
+    expect(result.findings.find((f) => f.ruleId === "deps.audit-unavailable")?.description).toContain("Django>=3.2");
+
+    const unpinnedOnly = repo({ "requirements.txt": "flask\n" });
+    expect((await runRepoChecks(unpinnedOnly, { fetchJson, gitLog })).summary.coverage.dependencies).toBe("unverifiable");
+  });
+
   it("reports a finding once when a monorepo carries two copies of the schema", async () => {
     const schema = "model User {\n  id String @id\n  password String\n}\n";
     const dir = repo({
@@ -94,7 +109,7 @@ describe("runRepoChecks", () => {
       "apps/web/prisma/schema.prisma": schema,
       "apps/web/app/api/me/route.ts": "export async function GET() { const u = await prisma.user.findUnique({ where: { id } }); return Response.json(u); }",
     });
-    const result = await runRepoChecks(dir, { dependencyAudit: false });
+    const result = await runRepoChecks(dir, { dependencyAudit: false, gitLog: async () => "" });
     expect(result.findings.filter((f) => f.ruleId === "secrets.row-exposure")).toHaveLength(1);
   });
 });
