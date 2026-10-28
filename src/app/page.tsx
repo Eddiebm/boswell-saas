@@ -132,7 +132,14 @@ export default async function HomePage() {
           <Link href="https://github.com/Eddiebm/boswell" className="underline">
             Boswell engine
           </Link>
-          . Docs in <code className="text-zinc-400">docs/</code>.
+          . Docs in <code className="text-zinc-400">docs/</code>. ·{" "}
+          <Link href="/privacy" className="underline">
+            Privacy
+          </Link>{" "}
+          ·{" "}
+          <Link href="/terms" className="underline">
+            Terms
+          </Link>
         </footer>
       </main>
     </div>

@@ -43,6 +43,9 @@ jobs:
           ADMIN_ALERT_EMAIL: ${{ secrets.ADMIN_ALERT_EMAIL }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
+          # Decrypts staging test-account passwords and provider tokens; must match the web app's value.
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          BOSWELL_ENCRYPTION_KEY: ${{ secrets.BOSWELL_ENCRYPTION_KEY }}
           AUTH_URL: https://boswell-saas.vercel.app
           BOSWELL_CLOUD_WORKER: "1"
           BOSWELL_PYTHON: python
