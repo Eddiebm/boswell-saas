@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { checkGitHistorySecrets, parseAddedLines } from "@/lib/checks/git-history";
 import { checkLaunchBasics } from "@/lib/checks/launch-basics";
-import { auditLockfile, type FetchJson } from "@/lib/checks/lockfile-audit";
-import { parseBunLock, parseGemfileLock, parsePipfileLock, parsePnpmLock, parsePoetryLock, parseRequirements, parseYarnLock, type ParsedLockfile } from "@/lib/checks/lockfiles";
+import { auditLockfile, osvFixedIn, type FetchJson } from "@/lib/checks/lockfile-audit";
+import { parseBunLock, parseGemfileLock, parsePipfileLock, parsePnpmLock, parsePoetryLock, parseRequirements, parseYarnLock, unpinnedRequirements, type ParsedLockfile } from "@/lib/checks/lockfiles";
 import type { RepoFile } from "@/lib/checks/types";
 
 const versions = (m: Map<string, Set<string>>, name: string) => [...(m.get(name) ?? [])].sort();
@@ -15,6 +15,26 @@ describe("lockfile parsers", () => {
     expect(versions(parsePnpmLock(v6), "@babel/core")).toEqual(["7.24.0"]);
     expect(versions(parsePnpmLock(v9), "@supabase/supabase-js")).toEqual(["2.45.0"]);
     expect(versions(parsePnpmLock(v9), "zod")).toEqual(["3.23.8"]);
+    const v5 = "lockfileVersion: 5.4\n\npackages:\n\n  /next/12.0.0_react@17.0.2:\n    resolution: {}\n  /@babel/core/7.24.0:\n    resolution: {}\n";
+    expect(versions(parsePnpmLock(v5), "next")).toEqual(["12.0.0"]);
+    expect(versions(parsePnpmLock(v5), "@babel/core")).toEqual(["7.24.0"]);
+  });
+
+  it("lists requirements.txt entries it can't pin to a version", () => {
+    const text = [
+      "requests==2.32.5 \\",
+      "    --hash=sha256:abc",
+      "Django>=3.2",
+      "flask",
+      "-e .",
+      "-e git+https://github.com/x/y.git#egg=y",
+      "-r base.txt",
+      "--index-url https://pypi.org/simple",
+      "# comment",
+      'pyyaml==6.0.1; python_version >= "3.8"',
+    ].join("\n");
+    expect(unpinnedRequirements(text)).toEqual(["Django>=3.2", "flask", "-e git+https://github.com/x/y.git#egg=y", "-r base.txt"]);
+    expect(versions(parseRequirements(text), "requests")).toEqual(["2.32.5"]);
   });
 
   it("reads yarn classic and berry lockfiles, skipping workspaces", () => {
@@ -41,7 +61,7 @@ describe("lockfile parsers", () => {
   });
 });
 
-const lock = (over: Partial<ParsedLockfile>): ParsedLockfile => ({ path: "pnpm-lock.yaml", kind: "pnpm", ecosystem: "npm", packages: new Map(), ...over });
+const lock = (over: Partial<ParsedLockfile>): ParsedLockfile => ({ path: "pnpm-lock.yaml", kind: "pnpm", ecosystem: "npm", packages: new Map(), unresolved: [], ...over });
 
 describe("auditLockfile", () => {
   it("matches npm advisories against the installed versions only", async () => {
@@ -82,6 +102,20 @@ describe("auditLockfile", () => {
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]).toMatchObject({ severity: "CRITICAL", title: "Vulnerable dependency: django@3.2.0" });
     expect(result.findings[0].recommendation).toContain("3.2.14 or later");
+  });
+
+  it("recommends an OSV fix above the installed release, or none", () => {
+    const vuln = {
+      id: "GHSA-bbbb",
+      affected: [
+        { package: { name: "Django" }, ranges: [{ type: "ECOSYSTEM", events: [{ introduced: "0" }, { fixed: "2.2.28" }, { introduced: "3.0" }, { fixed: "3.2.13" }] }] },
+        { package: { name: "django" }, ranges: [{ type: "GIT", events: [{ introduced: "0" }, { fixed: "deadbeef" }] }] },
+      ],
+    };
+    expect(osvFixedIn(vuln, "django", ["3.2.0"])).toBe("3.2.13");
+    expect(osvFixedIn(vuln, "django", ["2.2.0"])).toBe("2.2.28");
+    expect(osvFixedIn(vuln, "django", ["2.2.0", "3.2.0"])).toBe("3.2.13");
+    expect(osvFixedIn(vuln, "django", ["4.0.0"])).toBeUndefined();
   });
 
   it("reports a lookup failure instead of a clean result", async () => {
