@@ -6,7 +6,7 @@ import { requireDb } from "@/lib/db";
 import { auditRuns, findings, repositories } from "@/lib/db/schema";
 import { getGithubClient } from "@/lib/github";
 import { compareGuard, GUARD_MARKER, guardComment, type GuardFinding } from "@/lib/guard/compare";
-import { triggerAuditWorkerDispatch } from "@/lib/worker/trigger-worker";
+import { requestAuditWorker } from "@/lib/worker/trigger-worker";
 import type { CheckFinding } from "@/lib/checks";
 
 export const GUARD_CONTEXT = "Boswell / Ship Ready";
@@ -84,9 +84,7 @@ export async function queueGuardRun(repo: RepoRow, target: { sha: string | null;
     .insert(auditRuns)
     .values({ userId: repo.userId, repositoryId: repo.id, status: "queued", auditMode: "quick", trigger: "guard", targetSha: target.sha, prNumber: target.prNumber })
     .returning({ id: auditRuns.id });
-  void triggerAuditWorkerDispatch().catch(() => {
-    /* cron fallback */
-  });
+  requestAuditWorker();
   return run.id;
 }
 

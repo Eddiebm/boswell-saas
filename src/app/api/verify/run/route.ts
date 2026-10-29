@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getOptionalUserId } from "@/lib/session";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { listVerifyRuns, queueVerifyRun } from "@/lib/dynamic-verify/run";
-import { triggerAuditWorkerDispatch } from "@/lib/worker/trigger-worker";
+import { requestAuditWorker } from "@/lib/worker/trigger-worker";
 import { isDemoMode } from "@/lib/demo/mode";
 
 export async function GET(request: Request) {
@@ -39,9 +39,7 @@ export async function POST(request: Request) {
   try {
     const run = await queueVerifyRun(userId, body.targetId);
     if (!isDemoMode()) {
-      void triggerAuditWorkerDispatch().catch(() => {
-        /* cron fallback */
-      });
+      requestAuditWorker();
     }
     return NextResponse.json({
       run,
