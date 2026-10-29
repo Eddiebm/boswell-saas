@@ -23,7 +23,7 @@ vi.mock("@/lib/db", () => {
     }),
   };
 });
-vi.mock("@/lib/worker/trigger-worker", () => ({ triggerAuditWorkerDispatch: async () => {} }));
+vi.mock("@/lib/worker/trigger-worker", () => ({ requestAuditWorker: () => {} }));
 
 describe("webhook signature", () => {
   const body = '{"zen":"Keep it logically awesome."}';

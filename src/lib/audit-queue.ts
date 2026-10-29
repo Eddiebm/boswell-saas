@@ -9,7 +9,7 @@ import {
 import type { AuditMode } from "@/lib/audit-modes";
 import { normalizeAuditMode } from "@/lib/audit-modes";
 import { sendAuditAlert } from "@/lib/alerts/audit-alerts";
-import { triggerAuditWorkerDispatch } from "@/lib/worker/trigger-worker";
+import { requestAuditWorker } from "@/lib/worker/trigger-worker";
 
 async function ensureAuditQuota(userId: string) {
   const db = requireDb();
@@ -59,9 +59,7 @@ export async function queueAudit(userId: string, repositoryId: string, auditMode
     })
     .returning();
 
-  void triggerAuditWorkerDispatch().catch(() => {
-    /* cron fallback */
-  });
+  requestAuditWorker();
 
   return run;
 }
