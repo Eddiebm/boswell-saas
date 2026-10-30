@@ -20,7 +20,11 @@ updated:
    - **failure** only when the change adds a launch blocker,
    - **success** otherwise; existing blockers are mentioned, not counted
      against the change, and fixes are credited.
-5. Pull requests get one Boswell comment, edited in place on each push.
+5. Pull requests get one Boswell comment, edited in place on each push. It
+   also says how widely the change spreads: code files, areas of the app, and
+   whether any test changed (a wide change with no test is where one edit
+   quietly breaks three others). That note is advice only: it never fails the
+   check, which still fails only when a change adds a proven launch blocker.
 
 Pushes to the default branch keep Ship Ready current: after a fix is merged,
 the checklist reflects it without a new full audit. Engine (AI) findings

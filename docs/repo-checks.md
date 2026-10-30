@@ -15,6 +15,10 @@ pattern-based ones that are marked **needs review**.
 | 6 | **Outbound requests** — possible SSRF in route handlers, server `fetch` with no timeout | Pattern, needs review | 0.5–0.6 |
 | 7 | **Secret exposure** — routes returning full rows of tables with password/token columns; secrets in `NEXT_PUBLIC_`/`VITE_` variables | Pattern (0.5); public env var (0.85) | |
 | 8 | **Refresh wipes another feature's data** — delete-then-reinsert of a table another file also writes, without scoping the delete to its own rows | Pattern, needs review | 0.45 |
+| 10 | **Hidden failures** — empty `catch` blocks and `.catch(() => {})` with no stated reason (ranked higher in payment, login and database code), a `catch` that answers `ok`/`success` without logging, a POST route that casts the request body without validating it. Ordinary fallbacks (parsing text, browser storage, analytics) and any block with a comment giving a reason are skipped | Pattern, needs review | 0.4–0.6 |
+| 11 | **Leftovers** — source files nothing imports (framework entry points, scripts, tests and anything a package script or workflow names are skipped; monorepos aren't judged), runs of 5+ commented-out code lines, the same 10 lines in two files | Pattern, needs review | 0.45–0.7 |
+| 12 | **Change safety** — no tests, tests that no CI workflow (or build script) runs, payment/login/admin routes no test mentions | Pattern, needs review | 0.5–0.75 |
+| 13 | **Loops without a finish line** — `while (true)`/`for (;;)`/model-driven loops (JS, TS, Python) and `setInterval`s that call an AI model or take an action with no counter, deadline or budget; agent step limits set to none or 100+; network retries with no cap (a note) | Pattern, needs review | 0.5–0.7 |
 | 9 | **Bugs in pairs** — any finding whose flagged line is copied verbatim into 1–5 other files says where | Annotation | — |
 
 Findings below 0.8 confidence are shown but don't move the health score

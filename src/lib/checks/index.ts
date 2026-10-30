@@ -26,6 +26,10 @@ import { findLockfiles } from "@/lib/checks/lockfiles";
 import { auditLockfile, type FetchJson } from "@/lib/checks/lockfile-audit";
 import { checkGitHistorySecrets, type GitLog } from "@/lib/checks/git-history";
 import { checkAuthorization } from "@/lib/checks/authz";
+import { checkHiddenErrors } from "@/lib/checks/hidden-errors";
+import { checkDeadCode } from "@/lib/checks/dead-code";
+import { checkChangeSafety } from "@/lib/checks/change-safety";
+import { checkUnboundedLoops } from "@/lib/checks/unbounded-loops";
 import type { CheckFinding, RepoFile } from "@/lib/checks/types";
 
 export { annotateSiblings } from "@/lib/checks/siblings";
@@ -313,6 +317,10 @@ export async function runRepoChecks(
   findings.push(...safely("hardcoded-secrets", () => checkHardcodedSecrets(files)));
   findings.push(...safely("money", () => checkMoney(files)));
   findings.push(...safely("authorization", () => checkAuthorization(files)));
+  findings.push(...safely("hidden-errors", () => checkHiddenErrors(files)));
+  findings.push(...safely("dead-code", () => checkDeadCode(files)));
+  findings.push(...safely("change-safety", () => checkChangeSafety(files)));
+  findings.push(...safely("unbounded-loops", () => checkUnboundedLoops(files)));
 
   let databaseRules: Coverage = "unverifiable";
   findings.push(

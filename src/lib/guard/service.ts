@@ -5,7 +5,9 @@ import { decryptSecret, encryptSecret } from "@/lib/crypto/secrets";
 import { requireDb } from "@/lib/db";
 import { auditRuns, findings, repositories } from "@/lib/db/schema";
 import { getGithubClient } from "@/lib/github";
+import { assessChange, type ChangedFile, type ChangeRisk } from "@/lib/checks/change-safety";
 import { compareGuard, GUARD_MARKER, guardComment, type GuardFinding } from "@/lib/guard/compare";
+import { reportError } from "@/lib/monitoring";
 import { requestAuditWorker } from "@/lib/worker/trigger-worker";
 import type { CheckFinding } from "@/lib/checks";
 
@@ -108,6 +110,17 @@ export async function upsertPrComment(gh: Octokit, repo: RepoRow, prNumber: numb
   else await gh.rest.issues.createComment({ owner: repo.owner, repo: repo.name, issue_number: prNumber, body });
 }
 
+/** The files a pull request changes (the first 300), for the size note. */
+async function changedFiles(gh: Octokit, repo: RepoRow, prNumber: number): Promise<ChangedFile[]> {
+  const out: ChangedFile[] = [];
+  for (let page = 1; page <= 3; page++) {
+    const { data } = await gh.rest.pulls.listFiles({ owner: repo.owner, repo: repo.name, pull_number: prNumber, per_page: 100, page });
+    out.push(...data.map((f) => ({ filename: f.filename, additions: f.additions, deletions: f.deletions })));
+    if (data.length < 100) break;
+  }
+  return out;
+}
+
 function toGuardFinding(f: CheckFinding, i: number): GuardFinding {
   return { id: `g${i}`, ruleId: f.ruleId, severity: f.severity, category: f.category, title: f.title, description: f.description, filePath: f.filePath, lineStart: f.lineStart, recommendation: f.recommendation, confidence: f.confidence };
 }
@@ -161,6 +174,15 @@ export async function completeGuardRun(input: {
     .where(eq(auditRuns.id, run.id));
 
   await postStatus(gh, repo, result.commitSha, outcome.state, outcome.description);
-  if (run.prNumber !== null) await upsertPrComment(gh, repo, run.prNumber, guardComment(outcome, `${appUrl()}/dashboard/ship-ready`));
+  if (run.prNumber !== null) {
+    // The size note is a bonus: if GitHub won't list the files, the verdict still goes out, and the failure is reported.
+    let risk: ChangeRisk | null = null;
+    try {
+      risk = assessChange(await changedFiles(gh, repo, run.prNumber));
+    } catch (error) {
+      reportError(error, { component: "guard", runId: run.id });
+    }
+    await upsertPrComment(gh, repo, run.prNumber, guardComment(outcome, `${appUrl()}/dashboard/ship-ready`, risk));
+  }
   return outcome;
 }
