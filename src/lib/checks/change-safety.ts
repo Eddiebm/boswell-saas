@@ -5,11 +5,40 @@ import type { CheckFinding, RepoFile } from "@/lib/checks/types";
 const MAX_LISTED = 10;
 const NOT_A_PROJECT = /(^|\/)(examples?|fixtures?|__tests__|tests?|templates?|demo)\//;
 const CI_FILE = /(^|\/)(?:\.github\/workflows\/[^/]+\.ya?ml|\.gitlab-ci\.ya?ml|\.circleci\/config\.yml|azure-pipelines\.ya?ml|bitbucket-pipelines\.yml|\.travis\.yml)$/;
-const RUNS_TESTS = /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:test|check|verify|ci)\b|\bnpx\s+(?:vitest|jest|playwright|mocha)\b|\b(?:vitest|jest|pytest|mocha|playwright test|go test|cargo test|rspec)\b/;
+/** Running tests, by name. `npm ci` is an install and `check`/`verify` are only names: those count when the script they call runs a test runner. */
+const RUNS_TESTS = /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b|\bnpx\s+(?:vitest|jest|playwright|mocha)\b|\b(?:vitest|jest|pytest|mocha|playwright test|go test|cargo test|rspec)\b/;
 /** Routes and files where a break costs money or lets the wrong person in. */
 const CRITICAL = /stripe|webhook|billing|checkout|payment|subscription|(^|[/._-])auth|login|admin/i;
 
 type Scripts = Record<string, string>;
+
+/** Scripts the host or the package manager runs on its own (a deploy runs `build`; an install runs `postinstall`). */
+const LIFECYCLE = ["build", "prebuild", "postbuild", "vercel-build", "heroku-postbuild", "postinstall", "prepare", "prepublishOnly", "prepack"];
+
+/** The script names a command line calls: `npm run x`, `npm test`, `pnpm x`, `yarn x`, `bun run x`. */
+function scriptsCalledBy(text: string): string[] {
+  const names: string[] = [];
+  for (const m of text.matchAll(/\bnpm\s+run(?:-script)?\s+([\w:.-]+)|\bnpm\s+(test|start|stop|restart)\b|\b(?:pnpm|yarn|bun)\s+(?:run\s+)?([\w:.-]+)/g)) names.push(m[1] ?? m[2] ?? m[3]);
+  return names;
+}
+
+/** The text of every script something runs on its own: build and lifecycle hooks, scripts CI calls, and anything those call. */
+function automatedScriptText(scripts: Scripts, ci: RepoFile[]): string {
+  const reached = new Set<string>(LIFECYCLE.filter((n) => typeof scripts[n] === "string"));
+  for (const f of ci) for (const n of scriptsCalledBy(f.content)) if (typeof scripts[n] === "string") reached.add(n);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const name of [...reached]) {
+      for (const called of scriptsCalledBy(scripts[name])) {
+        if (typeof scripts[called] === "string" && !reached.has(called)) {
+          reached.add(called);
+          grew = true;
+        }
+      }
+    }
+  }
+  return [...reached].map((n) => scripts[n]).join("\n");
+}
 
 function scriptsOf(files: RepoFile[]): Scripts | null {
   const pkg = files.find((f) => f.path === "package.json");
@@ -52,11 +81,7 @@ export function checkChangeSafety(files: RepoFile[]): CheckFinding[] {
 
   if (tests.length > 0 && scripts?.test && !/no test specified/.test(scripts.test)) {
     const ci = files.filter((f) => CI_FILE.test(f.path));
-    const otherScripts = Object.entries(scripts)
-      .filter(([name]) => name !== "test")
-      .map(([, command]) => command)
-      .join("\n");
-    const runs = ci.some((f) => RUNS_TESTS.test(f.content)) || RUNS_TESTS.test(otherScripts);
+    const runs = ci.some((f) => RUNS_TESTS.test(f.content)) || RUNS_TESTS.test(automatedScriptText(scripts, ci));
     if (!runs) {
       out.push({
         ruleId: "habits.tests-not-run",

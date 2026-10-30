@@ -61,6 +61,18 @@ describe("loops that call an AI model with no limit", () => {
     expect(run(file("agent.py", "def run():\n    while True:\n        if attempts >= MAX_TURNS:\n            break\n        client.messages.create(m)\n"))).toEqual([]);
   });
 
+  it("does not mistake per-request options for a limit on the loop", () => {
+    const js = file("src/a.ts", "while (true) {\n  await openai.chat.completions.create({ model, messages, maxTokens: 1000, max_tokens: 1000, timeout: 30_000, signal: AbortSignal.timeout(5000), maxRetries: 2 });\n}\n");
+    expect(run(js)).toEqual(["habits.unbounded-loop:MEDIUM"]);
+    const py = file("agent.py", "def run():\n    while True:\n        out = client.messages.create(model=m, max_tokens=1024, timeout=30, messages=msgs)\n");
+    expect(run(py)).toEqual(["habits.unbounded-loop:MEDIUM"]);
+    // A limit that is actually compared still counts.
+    const compared = file("src/b.ts", "while (true) {\n  if (spent > maxCost) break;\n  await openai.chat.completions.create({ max_tokens: 1000 });\n}\n");
+    expect(run(compared)).toEqual([]);
+    const clock = file("src/c.ts", "while (!done) {\n  if (Date.now() - started > TIME_LIMIT_MS) break;\n  await callLLM(p);\n}\n");
+    expect(run(clock)).toEqual([]);
+  });
+
   it("does not count a counter that is only incremented, never compared", () => {
     const f = file("src/a.ts", "let round = 0;\nwhile (true) {\n  round++;\n  await openai.chat.completions.create(args);\n}\n");
     expect(run(f)).toEqual(["habits.unbounded-loop:MEDIUM"]);

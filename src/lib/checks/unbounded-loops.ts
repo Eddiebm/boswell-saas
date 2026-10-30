@@ -23,17 +23,24 @@ const LLM_CALL = new RegExp(
 );
 /** Actions that are hard to take back: sending, publishing, charging, deleting, spending, running commands. */
 const SIDE_EFFECT = /\b(?:send\w*|publish\w*|charge\w*|refund\w*|(?:launch|create|update|pause)Campaign\w*|(?:update|set)Budget\w*|delete\w*|drop\w*|remove\w*|(?:exec|spawn)(?:Sync)?|writeFile(?:Sync)?|unlink(?:Sync)?|rm(?:Sync)?|subprocess\.\w+|os\.system)\s*\(/;
-/** A real stop: a counter, a limit, a deadline, a budget. A flag the model itself sets ("done") is not one. */
+/**
+ * A real stop on the loop itself: a counter, a limit or a deadline that gets *compared*, or a clock check. A per-request
+ * option (`max_tokens`, `maxRetries`, `timeout`, `AbortSignal.timeout`) limits one call, not how many times the loop runs
+ * or what it spends in total, and a flag the model itself sets ("done") isn't a stop at all.
+ */
 const COUNTER = "(?:i|j|n|step|steps|iter|iteration|iterations|turn|turns|attempt|attempts|retry|retries|count|tries|round|rounds)";
+const LIMIT = String.raw`[\w.]*(?:max|MAX|Max|limit|Limit|LIMIT|budget|Budget|BUDGET|deadline|Deadline|DEADLINE|cap|Cap)\w*`;
 const BOUND = new RegExp(
   [
-    String.raw`\bmax[A-Z_]\w*|\bmax_\w+|\bMAX_?\w*`,
-    String.raw`\blimit\b|\bbudget\b|\bdeadline\b|\btimeout\b|\bttl\b`,
     // A counter compared with something: `round < MAX`, `if (++turns > 10)`, `attempts >= 5`. Counting alone is not a limit.
     String.raw`\b${COUNTER}\s*(?:\+\+|--)?\s*(?:<=?|>=?)`,
     String.raw`(?:<=?|>=?)\s*${COUNTER}\b`,
     String.raw`(?:\+\+|--)\s*${COUNTER}\s*(?:<=?|>=?)`,
-    String.raw`signal\??\.aborted|\bAbortSignal\b|Date\.now\(\)\s*[-<>]|\bperformance\.now\(\)|\brange\(`,
+    // Something compared with a limit-named value: `spent > MAX_COST`, `elapsed >= deadline`, `calls < budget`.
+    String.raw`(?:<=?|>=?)\s*${LIMIT}`,
+    String.raw`${LIMIT}\s*(?:<=?|>=?)`,
+    // A clock or an abort check inside the loop.
+    String.raw`signal\??\.aborted|Date\.now\(\)\s*[-<>]|\bperformance\.now\(\)|\brange\(`,
   ].join("|"),
 );
 /** Loop conditions the model or a flag decides, not a count. */

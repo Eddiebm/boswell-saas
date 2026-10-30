@@ -43,6 +43,24 @@ describe("tests that nothing runs", () => {
     expect(ids([pkg({ test: "vitest" }), file(".github/workflows/ci.yml", "steps:\n  - run: pnpm test\n"), ...base])).toEqual([]);
     expect(ids([pkg({ test: "vitest", build: "vitest run && next build" }), ...base])).toEqual([]);
   });
+
+  it("follows scripts that call other scripts, from CI or from a build hook", () => {
+    const viaCi = [pkg({ test: "vitest", verify: "npm run lint && npm run test:unit", "test:unit": "vitest run" }), file(".github/workflows/ci.yml", "steps:\n  - run: npm run verify\n"), ...base];
+    expect(ids(viaCi)).toEqual([]);
+    const viaBuild = [pkg({ test: "vitest", build: "npm run check && next build", check: "tsc && vitest run" }), ...base];
+    expect(ids(viaBuild)).toEqual([]);
+  });
+
+  it("ignores scripts nothing runs, such as an unused test:watch", () => {
+    const files = [pkg({ test: "vitest run", "test:watch": "vitest", build: "next build" }), file(".github/workflows/ci.yml", "steps:\n  - run: npm run build\n"), ...base];
+    const [f] = checkChangeSafety(files);
+    expect(f.title).toBe("CI never runs the tests");
+  });
+
+  it("doesn't read `npm ci` (an install) as running a script called ci, or credit scripts named verify or ci that nobody calls", () => {
+    const files = [pkg({ test: "vitest", ci: "vitest run", verify: "vitest run" }), file(".github/workflows/ci.yml", "steps:\n  - run: npm ci\n  - run: npm run build\n"), ...base];
+    expect(checkChangeSafety(files)[0].title).toBe("CI never runs the tests");
+  });
 });
 
 describe("payment, login and admin routes without a test", () => {
