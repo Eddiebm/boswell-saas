@@ -74,6 +74,8 @@ describe("failures that report success", () => {
   it("leaves it alone when the error is logged, rethrown or deliberately answered", () => {
     const logged = file("src/a.ts", "try { f(); } catch (e) { console.error(e); return { ok: true }; }\n");
     const rethrown = file("src/b.ts", "try { f(); } catch (e) { if (x) return { ok: true }; throw e; }\n");
+    const reported = file("src/e.ts", "try { f(); } catch (err) {\n  reportFailure('webhook body was not JSON')(err);\n  return Response.json({ ok: true });\n}\n");
+    expect(rules([reported])).toEqual([]);
     const explained = file("src/c.ts", "try { f(); } catch (e) {\n  // already processed: the sender replays events, so answer ok\n  return NextResponse.json({ ok: true });\n}\n");
     expect(rules([logged, rethrown, explained])).toEqual([]);
     const unexplained = file("src/d.ts", "try { f(); } catch (e) {\n  return NextResponse.json({ ok: true });\n}\n");

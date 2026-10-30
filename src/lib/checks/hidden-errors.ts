@@ -14,7 +14,7 @@ const DISMISSAL = new Set(
   ("ignore ignored ignoring skip skipped skipping noop no op nothing todo fixme whatever ok okay fine swallow swallowed silent silently " +
     "empty error errors failure failures handle handled handling is are it its that this the a an here for now to do dont don't care need needed safe can be we just catch").split(" "),
 );
-const LOGS = /\bconsole\.(?:error|warn|log)\b|\blogger\b|\bcaptureException\b|\breportError\b|\bSentry\b|\blog\s*\(/;
+const LOGS = /\bconsole\.(?:error|warn|log)\b|\blogger\b|\bcaptureException\b|\breport\w*\s*\(|\bSentry\b|\blog\s*\(/;
 const REPORTS_SUCCESS = /\b(?:success|ok)\s*:\s*true\b|\bstatus\s*:\s*["']?(?:ok|success)["']?|\.status\s*\(\s*200\s*\)|\bstatus\s*:\s*200\b/;
 const VALIDATION = /\b(?:zod|valibot|yup|joi|ajv|superstruct|typebox|arktype|io-ts)\b|\.safeParse\(|\bz\.object|\bv\.object|\bschema\.(?:parse|validate)/i;
 
