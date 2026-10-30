@@ -113,3 +113,22 @@ describe("runRepoChecks", () => {
     expect(result.findings.filter((f) => f.ruleId === "secrets.row-exposure")).toHaveLength(1);
   });
 });
+
+describe("runRepoChecks: the four habits", () => {
+  it("reports an AI loop with no limit, a swallowed payment error and an untested repo, and stays quiet on tidy code", async () => {
+    const files: Record<string, string> = { "package.json": packageJson };
+    for (let i = 0; i < 10; i++) files[`src/lib/m${i}.ts`] = `export const m${i} = ${i};\n`;
+    files["src/app/api/stripe/webhook/route.ts"] =
+      "export async function POST() {\n  try { await stripe.charges.create(x); } catch (e) {}\n  return Response.json({ ok: true });\n}\n";
+    files["src/lib/agent.ts"] = "export async function run() {\n  while (true) {\n    await openai.chat.completions.create({});\n  }\n}\n";
+    const { findings } = await runRepoChecks(repo(files), { dependencyAudit: false });
+    const ids = findings.map((f) => f.ruleId);
+    expect(ids).toEqual(expect.arrayContaining(["habits.swallowed-error", "habits.unbounded-loop", "habits.no-tests"]));
+
+    const tidy: Record<string, string> = { "package.json": packageJson };
+    for (let i = 0; i < 10; i++) tidy[`src/lib/m${i}.ts`] = `export const m${i} = ${i};\n`;
+    tidy["src/lib/m0.test.ts"] = 'import { m0 } from "./m0";\n';
+    const clean = await runRepoChecks(repo({ ...tidy, ".github/workflows/ci.yml": "steps:\n  - run: npm test\n", "package.json": JSON.stringify({ name: "app", scripts: { test: "vitest" } }) }), { dependencyAudit: false });
+    expect(clean.findings.filter((f) => f.ruleId.startsWith("habits."))).toEqual([]);
+  });
+});

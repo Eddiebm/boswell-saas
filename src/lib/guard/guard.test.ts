@@ -158,3 +158,24 @@ describe("queueGuardRun", () => {
     expect(db.inserted).toBe(1);
   });
 });
+
+describe("the four habits in the guard", () => {
+  const habitFinding = f({ ruleId: "habits.unbounded-loop", severity: "HIGH", category: "reliability", title: "1 loop calls an AI model with no limit", confidence: 0.6, filePath: "src/agent.ts" });
+
+  it("lists a new habit finding under 'worth a look' and never fails the check", () => {
+    const outcome = compareGuard([], [habitFinding]);
+    expect(outcome.state).toBe("success");
+    expect(outcome.newReview.map((x) => x.ruleId)).toEqual(["habits.unbounded-loop"]);
+    expect(guardComment(outcome, "https://boswell.example/dashboard/ship-ready")).toContain("Worth a look (1)");
+  });
+
+  it("adds a size note when a change is wide and untested, and omits it otherwise", () => {
+    const outcome = compareGuard([], []);
+    const risk = { files: 9, areas: 6, changedLines: 240, testsChanged: false, notes: ["240 lines of code changed and no test changed, so nothing here checks it."] };
+    const body = guardComment(outcome, "https://boswell.example/dashboard/ship-ready", risk);
+    expect(body).toContain("**Size of this change:** 9 code files in 6 areas, 240 lines");
+    expect(body).toContain("- 240 lines of code changed and no test changed");
+    expect(body).toContain("No new launch blockers");
+    expect(guardComment(outcome, "https://boswell.example/dashboard/ship-ready")).not.toContain("Size of this change");
+  });
+});

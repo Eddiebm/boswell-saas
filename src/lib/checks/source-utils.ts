@@ -8,6 +8,16 @@
 /** Text between the parenthesis at `openIndex` and its match (exclusive), or null if unbalanced within `limit`. */
 export function balancedArgs(content: string, openIndex: number, limit = 4000): string | null {
   if (content[openIndex] !== "(") return null;
+  return balanced(content, openIndex, limit);
+}
+
+/** Text between the brace at `openIndex` and its match (exclusive), or null if unbalanced within `limit`. */
+export function balancedBlock(content: string, openIndex: number, limit = 20000): string | null {
+  if (content[openIndex] !== "{") return null;
+  return balanced(content, openIndex, limit);
+}
+
+function balanced(content: string, openIndex: number, limit: number): string | null {
   let depth = 0;
   let quote: string | null = null;
   const end = Math.min(content.length, openIndex + limit);
@@ -75,4 +85,43 @@ export function escapeRegExp(text: string): string {
 /** Strips line and block comments so commented-out code doesn't count as usage. Strings are left intact. */
 export function stripComments(content: string): string {
   return content.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
+}
+
+/**
+ * The same text with comments and the inside of string literals replaced by
+ * spaces (newlines kept, so indexes and line numbers still line up). Patterns
+ * run on this can't match example code in a message or a comment.
+ */
+export function maskNonCode(content: string): string {
+  const out = content.split("");
+  const n = content.length;
+  const blank = (from: number, to: number) => {
+    for (let k = from; k < to; k++) if (out[k] !== "\n") out[k] = " ";
+  };
+  let i = 0;
+  while (i < n) {
+    const ch = content[i];
+    const next = content[i + 1];
+    if (ch === "/" && next === "/") {
+      const end = content.indexOf("\n", i);
+      const stop = end === -1 ? n : end;
+      blank(i, stop);
+      i = stop;
+    } else if (ch === "/" && next === "*") {
+      const end = content.indexOf("*/", i + 2);
+      const stop = end === -1 ? n : end + 2;
+      blank(i, stop);
+      i = stop;
+    } else if (ch === '"' || ch === "'" || ch === "`") {
+      let j = i + 1;
+      while (j < n && content[j] !== ch) {
+        if (content[j] === "\\") j++;
+        else if (ch !== "`" && content[j] === "\n") break;
+        j++;
+      }
+      blank(i + 1, j);
+      i = j + 1;
+    } else i++;
+  }
+  return out.join("");
 }

@@ -17,6 +17,10 @@ verification run. Page: `/dashboard/ship-ready` (or `?audit=<id>`).
 | No known-vulnerable packages, clean installs work | npm audit triage for package-lock.json; npm's advisory database for pnpm, yarn and bun lockfiles; OSV for requirements.txt, poetry.lock, Pipfile.lock and Gemfile.lock; lockfile drift / invalid lockfile (always block) | HIGH |
 | No critical issues in the code review | The engine's own findings | CRITICAL (HIGH → review) |
 | Server code can't be turned against you | SSRF, data-wiping refreshes, missing timeouts | MEDIUM (pattern → review) |
+| Failures aren't hidden | Errors swallowed with no reason (higher in payment, login and database code), `catch` blocks that answer "success", request bodies trusted by a type cast | MEDIUM (pattern → review) |
+| No leftover or copy-pasted code | Files nothing imports, old code kept in comments, the same block pasted into several files | MEDIUM when there's a lot (pattern → review) |
+| A change can't break things unnoticed | No tests, tests that no CI workflow runs, payment/login/admin routes no test mentions | MEDIUM (pattern → review) |
+| Nothing runs forever on your bill | Loops that call an AI model with no counter, deadline or budget; agent step limits switched off | HIGH when the loop takes actions (pattern → review) |
 | Every setting the app needs is documented | Undocumented env vars | review only |
 | You'll know when something breaks | No error monitoring, or Sentry not wired up | MEDIUM |
 | The site is hardened | Public source maps, missing security headers | MEDIUM |

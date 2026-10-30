@@ -1,3 +1,4 @@
+import type { ChangeRisk } from "@/lib/checks/change-safety";
 import { classifyFinding, type ShipFinding } from "@/lib/ship-ready/checklist";
 
 export type GuardFinding = ShipFinding;
@@ -58,7 +59,7 @@ function row(f: GuardFinding) {
 
 export const GUARD_MARKER = "<!-- boswell-guard -->";
 
-export function guardComment(outcome: GuardOutcome, shipReadyUrl: string): string {
+export function guardComment(outcome: GuardOutcome, shipReadyUrl: string, risk: ChangeRisk | null = null): string {
   const lines = [GUARD_MARKER, "### Boswell Ship Ready guard", ""];
   if (outcome.newBlockers.length) {
     lines.push(
@@ -81,6 +82,10 @@ export function guardComment(outcome: GuardOutcome, shipReadyUrl: string): strin
   }
   if (outcome.existingBlockers) {
     lines.push("", `${outcome.existingBlockers} launch ${outcome.existingBlockers === 1 ? "blocker was" : "blockers were"} already on the base branch — not counted against this change.`);
+  }
+  if (risk) {
+    // Advice only: a wide change with no test never fails the check, it just says where to look.
+    lines.push("", `**Size of this change:** ${risk.files} code ${risk.files === 1 ? "file" : "files"} in ${risk.areas} ${risk.areas === 1 ? "area" : "areas"}, ${risk.changedLines} lines`, ...risk.notes.map((note) => `- ${note}`));
   }
   lines.push("", `[Open Ship Ready](${shipReadyUrl}) · checks only, no code was run`);
   return lines.join("\n");

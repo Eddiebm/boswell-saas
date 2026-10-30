@@ -134,3 +134,43 @@ describe("evaluateShipReady thresholds", () => {
     expect(item(evaluateShipReady({ ...base, summary: connected, findings: [missing] }), "production-config").status).toBe("fail");
   });
 });
+
+describe("the four habits items", () => {
+  const habit = (ruleId: string, severity: ShipFinding["severity"], confidence: number) => finding({ ruleId, severity, category: "reliability", confidence });
+
+  it("ask for review on pattern matches and never block a launch", () => {
+    const v = evaluateShipReady({
+      ...base,
+      findings: [
+        habit("habits.swallowed-error", "MEDIUM", 0.6),
+        habit("habits.dead-file", "MEDIUM", 0.6),
+        habit("habits.untested-critical", "MEDIUM", 0.5),
+        habit("habits.unbounded-loop", "HIGH", 0.6),
+      ],
+    });
+    expect(item(v, "hidden-errors").status).toBe("review");
+    expect(item(v, "dead-code").status).toBe("review");
+    expect(item(v, "change-safety").status).toBe("review");
+    expect(item(v, "bounded-loops").status).toBe("review");
+    expect(v.blockers).toBe(0);
+    expect(v.state).toBe("almost");
+  });
+
+  it("only note low-severity findings, and pass when nothing is found", () => {
+    const v = evaluateShipReady({ ...base, findings: [habit("habits.unvalidated-input", "LOW", 0.4), habit("habits.commented-out-code", "LOW", 0.7)] });
+    expect(item(v, "hidden-errors").status).toBe("pass");
+    expect(item(v, "hidden-errors").findings).toHaveLength(1);
+    expect(item(v, "dead-code").status).toBe("pass");
+    expect(item(evaluateShipReady({ ...base, findings: [] }), "bounded-loops").status).toBe("pass");
+  });
+
+  it("don't pass when the checks never ran", () => {
+    const v = evaluateShipReady({ ...base, summary: null, findings: [] });
+    for (const id of ["hidden-errors", "dead-code", "change-safety", "bounded-loops"]) expect(item(v, id).status).toBe("unverified");
+  });
+
+  it("put the problem and a fix prompt in front of the user", () => {
+    const v = evaluateShipReady({ ...base, findings: [{ ...habit("habits.unbounded-loop", "HIGH", 0.6), title: "1 loop calls an AI model with no limit" }] });
+    expect(item(v, "bounded-loops").prompt).toContain("1 loop calls an AI model with no limit");
+  });
+});

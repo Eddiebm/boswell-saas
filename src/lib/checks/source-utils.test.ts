@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { balancedArgs, escapeRegExp, findCalls, splitArgs, stripComments } from "@/lib/checks/source-utils";
+import { balancedArgs, escapeRegExp, findCalls, splitArgs, stripComments, balancedBlock, maskNonCode } from "@/lib/checks/source-utils";
 
 describe("balancedArgs", () => {
   it("returns the text inside matching parentheses, across nested brackets", () => {
@@ -70,5 +70,35 @@ describe("stripComments", () => {
   it("keeps URLs and comment markers inside strings", () => {
     const src = 'const u = "https://example.com"; const s = "//not a comment";';
     expect(stripComments(src)).toBe(src);
+  });
+});
+
+describe("balancedBlock", () => {
+  it("returns the text inside a brace pair, skipping braces in strings and comments", () => {
+    const src = 'catch (e) { if (x) { log("}"); } /* } */ return 1; } after';
+    expect(balancedBlock(src, src.indexOf("{"))).toBe(' if (x) { log("}"); } /* } */ return 1; ');
+  });
+
+  it("returns null for a non-brace start or an unclosed block", () => {
+    expect(balancedBlock("abc", 0)).toBeNull();
+    expect(balancedBlock("{ never closed", 0)).toBeNull();
+  });
+});
+
+describe("maskNonCode", () => {
+  it("blanks comments and string contents but keeps length, newlines and code", () => {
+    const src = 'const a = "catch {}"; // try { x } catch {}\n/* old()\n*/ b();\n';
+    const masked = maskNonCode(src);
+    expect(masked).toHaveLength(src.length);
+    expect(masked.split("\n")).toHaveLength(src.split("\n").length);
+    expect(masked).not.toContain("catch");
+    expect(masked).toContain("const a =");
+    expect(masked).toContain("b();");
+  });
+
+  it("handles escaped quotes and template literals", () => {
+    const masked = maskNonCode("const a = 'it\\'s catch'; const b = `x ${y} catch`; z();");
+    expect(masked).not.toContain("catch");
+    expect(masked).toContain("z();");
   });
 });
